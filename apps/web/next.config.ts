@@ -2,6 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@homecal/shared"],
+  rewrites: async () => [
+    {
+      source: "/api/:path*",
+      destination: "http://localhost:3001/api/:path*",
+    },
+  ],
 };
 
 export default nextConfig;
