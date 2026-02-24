@@ -4,7 +4,7 @@ import postgres from "postgres";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as schema from "../../src/db/schema.js";
 
-const { users, events, eventLogs } = schema;
+const { users, events, eventLogs, sessions, accounts } = schema;
 
 const TEST_DATABASE_URL = process.env.DATABASE_URL;
 if (!TEST_DATABASE_URL) {
@@ -27,6 +27,8 @@ beforeEach(async () => {
   // Clean tables in FK-safe order
   await db.delete(eventLogs);
   await db.delete(events);
+  await db.delete(sessions);
+  await db.delete(accounts);
   await db.delete(users);
 });
 
@@ -34,12 +36,14 @@ describe("users table", () => {
   it("inserts and retrieves a user", async () => {
     const [user] = await db
       .insert(users)
-      .values({ name: "Alice", color: "#ff0000", passwordHash: "hash123" })
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
       .returning();
 
     expect(user.id).toBeDefined();
     expect(user.name).toBe("Alice");
+    expect(user.email).toBe("alice@test.com");
     expect(user.color).toBe("#ff0000");
+    expect(user.role).toBe("user");
     expect(user.createdAt).toBeInstanceOf(Date);
   });
 
@@ -47,12 +51,109 @@ describe("users table", () => {
     const inserted = await db
       .insert(users)
       .values([
-        { name: "Alice", color: "#ff0000", passwordHash: "hash1" },
-        { name: "Bob", color: "#0000ff", passwordHash: "hash2" },
+        { name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" },
+        { name: "Bob", email: "bob@test.com", emailVerified: false, color: "#0000ff" },
       ])
       .returning();
 
     expect(inserted[0].id).not.toBe(inserted[1].id);
+  });
+
+  it("enforces unique email constraint", async () => {
+    await db
+      .insert(users)
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" });
+
+    await expect(
+      db.insert(users).values({
+        name: "Alice2",
+        email: "alice@test.com",
+        emailVerified: false,
+        color: "#00ff00",
+      }),
+    ).rejects.toThrow();
+  });
+});
+
+describe("sessions table", () => {
+  it("inserts a session linked to a user", async () => {
+    const [user] = await db
+      .insert(users)
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
+      .returning();
+
+    const [session] = await db
+      .insert(sessions)
+      .values({
+        userId: user.id,
+        token: "test-token-123",
+        expiresAt: new Date("2026-12-31T00:00:00Z"),
+      })
+      .returning();
+
+    expect(session.id).toBeDefined();
+    expect(session.userId).toBe(user.id);
+    expect(session.token).toBe("test-token-123");
+    expect(session.expiresAt).toBeInstanceOf(Date);
+  });
+
+  it("cascades delete from user to sessions", async () => {
+    const [user] = await db
+      .insert(users)
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
+      .returning();
+
+    await db.insert(sessions).values({
+      userId: user.id,
+      token: "test-token",
+      expiresAt: new Date("2026-12-31T00:00:00Z"),
+    });
+
+    await db.delete(users).where(eq(users.id, user.id));
+
+    const remaining = await db.select().from(sessions);
+    expect(remaining).toHaveLength(0);
+  });
+});
+
+describe("accounts table", () => {
+  it("inserts an account linked to a user", async () => {
+    const [user] = await db
+      .insert(users)
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
+      .returning();
+
+    const [account] = await db
+      .insert(accounts)
+      .values({
+        userId: user.id,
+        accountId: user.id,
+        providerId: "credential",
+        password: "hashed-password",
+      })
+      .returning();
+
+    expect(account.id).toBeDefined();
+    expect(account.userId).toBe(user.id);
+    expect(account.providerId).toBe("credential");
+  });
+
+  it("cascades delete from user to accounts", async () => {
+    const [user] = await db
+      .insert(users)
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
+      .returning();
+
+    await db.insert(accounts).values({
+      userId: user.id,
+      accountId: user.id,
+      providerId: "credential",
+    });
+
+    await db.delete(users).where(eq(users.id, user.id));
+
+    const remaining = await db.select().from(accounts);
+    expect(remaining).toHaveLength(0);
   });
 });
 
@@ -60,7 +161,7 @@ describe("events table", () => {
   it("inserts an event linked to a user", async () => {
     const [user] = await db
       .insert(users)
-      .values({ name: "Alice", color: "#ff0000", passwordHash: "hash" })
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
       .returning();
 
     const [event] = await db
@@ -96,7 +197,7 @@ describe("events table", () => {
   it("cascades delete from user to events", async () => {
     const [user] = await db
       .insert(users)
-      .values({ name: "Alice", color: "#ff0000", passwordHash: "hash" })
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
       .returning();
 
     await db.insert(events).values({
@@ -117,7 +218,7 @@ describe("eventLogs table", () => {
   it("inserts a log entry with changes", async () => {
     const [user] = await db
       .insert(users)
-      .values({ name: "Alice", color: "#ff0000", passwordHash: "hash" })
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
       .returning();
 
     const [event] = await db
@@ -149,7 +250,7 @@ describe("eventLogs table", () => {
   it("allows null changes", async () => {
     const [user] = await db
       .insert(users)
-      .values({ name: "Alice", color: "#ff0000", passwordHash: "hash" })
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
       .returning();
 
     const [event] = await db
@@ -177,7 +278,7 @@ describe("eventLogs table", () => {
   it("cascades delete from event to logs", async () => {
     const [user] = await db
       .insert(users)
-      .values({ name: "Alice", color: "#ff0000", passwordHash: "hash" })
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
       .returning();
 
     const [event] = await db
@@ -207,7 +308,7 @@ describe("relational queries", () => {
   it("queries user with their events", async () => {
     const [user] = await db
       .insert(users)
-      .values({ name: "Alice", color: "#ff0000", passwordHash: "hash" })
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
       .returning();
 
     await db.insert(events).values([
@@ -237,7 +338,7 @@ describe("relational queries", () => {
   it("queries event with owner and logs", async () => {
     const [user] = await db
       .insert(users)
-      .values({ name: "Alice", color: "#ff0000", passwordHash: "hash" })
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
       .returning();
 
     const [event] = await db
@@ -264,5 +365,34 @@ describe("relational queries", () => {
     expect(result?.owner.name).toBe("Alice");
     expect(result?.logs).toHaveLength(1);
     expect(result?.logs[0].action).toBe("create");
+  });
+
+  it("queries user with sessions and accounts", async () => {
+    const [user] = await db
+      .insert(users)
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
+      .returning();
+
+    await db.insert(sessions).values({
+      userId: user.id,
+      token: "session-token",
+      expiresAt: new Date("2026-12-31T00:00:00Z"),
+    });
+
+    await db.insert(accounts).values({
+      userId: user.id,
+      accountId: user.id,
+      providerId: "credential",
+    });
+
+    const result = await db.query.users.findFirst({
+      where: eq(users.id, user.id),
+      with: { sessions: true, accounts: true },
+    });
+
+    expect(result?.sessions).toHaveLength(1);
+    expect(result?.accounts).toHaveLength(1);
+    expect(result?.sessions[0].token).toBe("session-token");
+    expect(result?.accounts[0].providerId).toBe("credential");
   });
 });
