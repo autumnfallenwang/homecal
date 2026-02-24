@@ -8,7 +8,7 @@
 | 2 | PostgreSQL + Drizzle ORM schema | ✅ Done | Docker scripts, Drizzle schema (users/events/event_logs), drizzle-kit config |
 | 3 | Better Auth setup | ✅ Done | Email+password, session cookies, admin role, first-user-admin hook |
 | 4 | CRUD events API | ✅ Done | 5 REST endpoints, shared Zod schemas, visibility rules, change logging (103 tests) |
-| 5 | Users list endpoint | Not started | `GET /api/users` → `[{ id, name, color }]` for member filter sidebar |
+| 5 | Users list endpoint | ✅ Done | `GET /api/users` → `[{ id, name, color }]` for member filter sidebar (109 tests) |
 | 6 | Frontend setup | Not started | Tailwind CSS + shadcn/ui, auth pages (`/login`, `/register`), session management |
 | 7 | Calendar month view | Not started | Month grid, color-coded event pills, member filter sidebar, prev/next navigation |
 | 8 | Event create/edit/delete | Not started | shadcn modal dialog for create/edit form, delete with confirmation |
@@ -28,14 +28,15 @@
 ## What's Working
 
 - Monorepo: `apps/api` (Hono, port 3001), `apps/web` (Next.js, port 3000), `packages/shared`
-- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (103 tests passing)
+- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (109 tests passing)
 - Docker PostgreSQL: `scripts/db-start.sh` / `db-stop.sh` / `db-reset.sh`
 - Auth: signup, signin, signout, session check, admin plugin, `requireAuth` middleware
 - Events CRUD: 5 endpoints with visibility rules, Zod validation, change logging, date range filtering
+- Users list: `GET /api/users` returns `[{ id, name, color }]` ordered by name, auth-protected
 
 ## What's Next
 
-Task 5: Users list endpoint — small backend addition before starting frontend work.
+Task 6: Frontend setup — Tailwind CSS + shadcn/ui, auth pages, session management.
 
 ## Reference Docs
 
