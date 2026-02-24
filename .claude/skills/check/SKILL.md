@@ -3,10 +3,10 @@ name: check
 description: Run lint + test + type-check in sequence
 ---
 
-Run all three checks and report results:
+Run all checks and report results. Stop on first failure.
 
-1. `pnpm lint` (biome check across all packages)
-2. `pnpm --filter @homecal/api exec tsc --noEmit` (API type-check)
-3. `pnpm test:fast` (unit tests only)
+1. Run `/lint`
+2. `pnpm --filter @homecal/api exec tsc --noEmit`
+3. Run `/test` — pass `$ARGUMENTS` through (e.g. `/check fast` → `/test fast`, `/check all` → `/test all`)
 
-Stop on first failure. Report pass/fail for each step.
+If no arguments provided, default to fast tests.

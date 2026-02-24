@@ -38,34 +38,48 @@ EventLog { id, eventId, userId, action, changes, timestamp }
 - First user to register becomes admin (can invite/remove members)
 - Local network — no OAuth needed
 
+## Frontend Decisions
+
+- **UI stack**: Tailwind CSS + shadcn/ui components + custom calendar grid
+- **Calendar**: Month view first, week view deferred to Phase 2
+- **Event editing**: Modal dialog (stays on calendar page)
+- **Pages**: `/login`, `/register`, `/` (protected main calendar)
+- **Admin**: Deferred — Better Auth admin plugin provides full API (`/api/auth/admin/*`), build UI later
+
 ## UI Overview
 
-### Default View
-- Monthly/weekly calendar showing all family members' shared events
-- Events color-coded by owner
-- Sidebar checkboxes to filter by family member
+### Main Layout
 
 ```
-┌──────────────────────────────────────┐
-│  February 2026                       │
-│                                      │
-│  Mon 23                              │
-│   🟢 Dad: Gym 6pm                   │
-│   🔵 Mom: Dentist 2pm               │
-│   🟠 Kid: Soccer practice 4pm       │
-│                                      │
-│  Filter:                             │
-│   ☑ 🟢 Dad                          │
-│   ☑ 🔵 Mom                          │
-│   ☑ 🟠 Kid                          │
-└──────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│ Header: HomeCal logo | "Feb 2026" ◀ ▶ | + New  │
+│         Month/Week toggle     [user avatar] Out │
+├────────────────────┬────────────────────────────┤
+│ Sidebar            │  Calendar Grid             │
+│                    │                            │
+│ Family Members     │  Mon  Tue  Wed  Thu  Fri   │
+│ ☑ 🟢 Dad          │  ┌───┬───┬───┬───┬───┐    │
+│ ☑ 🔵 Mom          │  │   │   │   │   │   │    │
+│ ☑ 🟠 Kid          │  │   │ 🟢│   │🔵 │   │    │
+│                    │  │   │Gym│   │Doc│   │    │
+│                    │  └───┴───┴───┴───┴───┘    │
+├────────────────────┴────────────────────────────┤
+│ (Event modal dialog opens on click / "+ New")   │
+└─────────────────────────────────────────────────┘
 ```
+
+### Key Components
+- **Header** — month navigation (prev/next), "New Event" button, user menu with sign out
+- **MemberFilter** — sidebar checkboxes per family member (from `GET /api/users`)
+- **MonthGrid** — 7-column CSS grid, events as colored pills
+- **EventFormModal** — shadcn dialog for create/edit (title, start, end, private toggle)
+- **AuthForm** — shared login/register form
 
 ### Event Creation
-- "New Event" button → form with title, date/time, private toggle
+- "New Event" button → modal dialog with title, date/time, private toggle
 
 ### Event Detail
-- Tap an event to view/edit
+- Click an event pill → modal opens prefilled for editing
 - "History" section shows change log (who changed what, when)
 
 ## Deployment
@@ -81,12 +95,17 @@ EventLog { id, eventId, userId, action, changes, timestamp }
 2. PostgreSQL (Docker) + Drizzle ORM schema + migrations
 3. Better Auth (register, login, session)
 4. CRUD events API (Hono endpoints)
-5. Calendar web UI (monthly/weekly view, create/edit/delete events, filter by member)
-6. Event change log
-7. Deploy on LAN for family use
+5. Users list endpoint (`GET /api/users` for member filter)
+6. Frontend setup (Tailwind + shadcn/ui, auth pages, session management)
+7. Calendar month view (month grid, event pills, member filter sidebar)
+8. Event create/edit/delete UI (modal dialog)
+9. Event change log UI
+10. Deploy on LAN for family use
 
-### Phase 2 — Smart input (future)
-- LLM-powered input via llm-gateway (image/voice/text → structured events)
+### Phase 2 — Enhancements (future)
+- Week view (hourly time-slot grid, month/week toggle)
+- Admin UI (user management — Better Auth admin APIs already exist)
+- Smart input via llm-gateway (image/voice/text → structured events)
 - Notifications/reminders
 
 ### Phase 3 — Mobile (future)
