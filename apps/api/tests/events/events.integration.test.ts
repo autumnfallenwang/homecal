@@ -451,6 +451,133 @@ describe("PATCH /api/events/:id", () => {
   });
 });
 
+// --- LOGS ---
+
+describe("GET /api/events/:id/logs", () => {
+  it("returns logs with user info for shared event", async () => {
+    const alice = await createUser("Alice", "alice@test.com", "#ff0000");
+    const { body: event } = await createEvent(alice, sharedEvent);
+
+    const res = await req(`/api/events/${event.id}/logs`, {
+      headers: { Cookie: alice },
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveLength(1);
+    expect(body[0].action).toBe("created");
+    expect(body[0].user.name).toBe("Alice");
+    expect(body[0].user.color).toBe("#ff0000");
+  });
+
+  it("returns logs ordered newest first", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    const { body: event } = await createEvent(alice, sharedEvent);
+
+    // Update to create a second log
+    await req(`/api/events/${event.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: alice },
+      body: JSON.stringify({ title: "Updated Dinner" }),
+    });
+
+    const res = await req(`/api/events/${event.id}/logs`, {
+      headers: { Cookie: alice },
+    });
+    const body = await res.json();
+
+    expect(body).toHaveLength(2);
+    expect(body[0].action).toBe("updated");
+    expect(body[1].action).toBe("created");
+  });
+
+  it("includes field-level changes in update logs", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    const { body: event } = await createEvent(alice, sharedEvent);
+
+    await req(`/api/events/${event.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: alice },
+      body: JSON.stringify({ title: "New Title" }),
+    });
+
+    const res = await req(`/api/events/${event.id}/logs`, {
+      headers: { Cookie: alice },
+    });
+    const body = await res.json();
+
+    const updateLog = body.find((l: { action: string }) => l.action === "updated");
+    expect(updateLog.changes.title.from).toBe("Family Dinner");
+    expect(updateLog.changes.title.to).toBe("New Title");
+  });
+
+  it("shows logs from different users", async () => {
+    const alice = await createUser("Alice", "alice@test.com", "#ff0000");
+    const bob = await createUser("Bob", "bob@test.com", "#0000ff");
+    const { body: event } = await createEvent(alice, sharedEvent);
+
+    await req(`/api/events/${event.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: bob },
+      body: JSON.stringify({ title: "Bob Updated" }),
+    });
+
+    const res = await req(`/api/events/${event.id}/logs`, {
+      headers: { Cookie: alice },
+    });
+    const body = await res.json();
+
+    expect(body).toHaveLength(2);
+    const users = body.map((l: { user: { name: string } }) => l.user.name);
+    expect(users).toContain("Alice");
+    expect(users).toContain("Bob");
+  });
+
+  it("returns empty array for private events (no logs created)", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    const { body: event } = await createEvent(alice, privateEvent);
+
+    const res = await req(`/api/events/${event.id}/logs`, {
+      headers: { Cookie: alice },
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveLength(0);
+  });
+
+  it("returns 404 for other users private event logs", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    const bob = await createUser("Bob", "bob@test.com", "#0000ff");
+    const { body: event } = await createEvent(alice, privateEvent);
+
+    const res = await req(`/api/events/${event.id}/logs`, {
+      headers: { Cookie: bob },
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for non-existent event", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+
+    const res = await req("/api/events/00000000-0000-0000-0000-000000000000/logs", {
+      headers: { Cookie: alice },
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 401 without auth", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    const { body: event } = await createEvent(alice, sharedEvent);
+
+    const res = await req(`/api/events/${event.id}/logs`);
+
+    expect(res.status).toBe(401);
+  });
+});
+
 // --- DELETE ---
 
 describe("DELETE /api/events/:id", () => {

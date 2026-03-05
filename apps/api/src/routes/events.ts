@@ -1,9 +1,9 @@
 import { createEventSchema, eventQuerySchema, updateEventSchema } from "@homecal/shared";
-import { and, eq, gte, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, lte, or } from "drizzle-orm";
 import { Hono } from "hono";
 import type { auth } from "../auth.js";
 import { db } from "../db/index.js";
-import { eventLogs, events } from "../db/schema.js";
+import { eventLogs, events, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 
 type Session = typeof auth.$Infer.Session;
@@ -102,6 +102,43 @@ eventsApp.get("/:id", async (c) => {
   }
 
   return c.json(result);
+});
+
+// GET /:id/logs — Get event change logs
+eventsApp.get("/:id/logs", async (c) => {
+  const id = c.req.param("id");
+  const userId = c.get("user").id;
+
+  const event = await db.query.events.findFirst({
+    where: eq(events.id, id),
+  });
+
+  if (!event) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  if (event.private && event.ownerId !== userId) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  const logs = await db
+    .select({
+      id: eventLogs.id,
+      action: eventLogs.action,
+      changes: eventLogs.changes,
+      timestamp: eventLogs.timestamp,
+      user: {
+        id: users.id,
+        name: users.name,
+        color: users.color,
+      },
+    })
+    .from(eventLogs)
+    .innerJoin(users, eq(eventLogs.userId, users.id))
+    .where(eq(eventLogs.eventId, id))
+    .orderBy(desc(eventLogs.timestamp));
+
+  return c.json(logs);
 });
 
 // PATCH /:id — Update event

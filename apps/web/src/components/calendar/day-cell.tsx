@@ -31,8 +31,9 @@ export function DayCell({
   const overflowCount = events.length - MAX_VISIBLE_PILLS;
 
   return (
-    <button
-      type="button"
+    // biome-ignore lint/a11y/useKeyWithClickEvents: day cell contains interactive EventPill buttons
+    // biome-ignore lint/a11y/noStaticElementInteractions: day cell is a grid cell with nested interactive buttons
+    <div
       className={cn(
         "min-h-24 cursor-pointer border-b border-r p-1 text-left",
         !isCurrentMonth && "bg-muted/30",
@@ -67,6 +68,6 @@ export function DayCell({
           <span className="px-1.5 text-xs text-muted-foreground">+{overflowCount} more</span>
         )}
       </div>
-    </button>
+    </div>
   );
 }

@@ -6,7 +6,7 @@ import { EventDialog } from "@/components/calendar/event-dialog";
 import { MemberFilter } from "@/components/calendar/member-filter";
 import { MonthGrid } from "@/components/calendar/month-grid";
 import { useAuthRedirect } from "@/hooks/use-auth-redirect";
-import { useEvents } from "@/hooks/use-events";
+import { type CalendarEvent, useEvents } from "@/hooks/use-events";
 import { useMembers } from "@/hooks/use-members";
 import { getGridEnd, getGridStart, getMonthGridDates } from "@/lib/calendar-utils";
 
@@ -20,6 +20,7 @@ export default function HomePage() {
   const [{ year, month }, setYearMonth] = useState(currentYearMonth);
   const [visibleMemberIds, setVisibleMemberIds] = useState<Set<string> | null>(null);
   const [dialogDate, setDialogDate] = useState<Date | null>(null);
+  const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
 
   const gridDates = useMemo(() => getMonthGridDates(year, month), [year, month]);
   const from = useMemo(() => getGridStart(gridDates), [gridDates]);
@@ -74,9 +75,13 @@ export default function HomePage() {
     setDialogDate(new Date());
   }, []);
 
-  const handleEventClick = useCallback((_eventId: string) => {
-    // Will open event detail/edit dialog later
-  }, []);
+  const handleEventClick = useCallback(
+    (eventId: string) => {
+      const event = filteredEvents.find((e) => e.id === eventId);
+      if (event) setEditEvent(event);
+    },
+    [filteredEvents],
+  );
 
   const handleDayClick = useCallback((date: Date) => {
     setDialogDate(date);
@@ -116,7 +121,15 @@ export default function HomePage() {
           />
         </main>
       </div>
-      <EventDialog date={dialogDate} onClose={() => setDialogDate(null)} onCreated={refetch} />
+      <EventDialog
+        date={dialogDate}
+        event={editEvent}
+        onClose={() => {
+          setDialogDate(null);
+          setEditEvent(null);
+        }}
+        onSaved={refetch}
+      />
     </div>
   );
 }
