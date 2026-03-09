@@ -20,10 +20,28 @@
 | 10 | Week view | ✅ Done | 24-hour grid (scroll default 7AM), month/week toggle, click-to-create at hour, overlap handling |
 | 11 | Smart input — backend | ✅ Done | `POST /api/events/parse` — text → LLM (llm-gateway) → `{ title, start, end }`, shared schemas, unit + integration tests |
 | 12 | Smart input — frontend | ✅ Done | CalendarHeader smart input field, EventDialog parsedEvent pre-fill, Haiku default + Gemma fallback |
-| 13 | LAN deploy | Not started | Bind to 0.0.0.0, family access via local network |
-| 14 | Notifications | Not started | Reminders and alerts for upcoming events |
-| 15 | Admin UI | Not started | User management page — low priority for small family use |
-| 16 | Mobile app | Not started | Swift iOS app calling same Hono API (Better Auth bearer token) |
+
+## Phase 3: LAN + iOS App
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 13 | LAN expose | Not started | Bind Hono API to 0.0.0.0, verify LAN access from other devices |
+| 14 | Better Auth bearer tokens | Not started | Enable token-based auth for mobile clients |
+| 15 | iOS project setup | Not started | Swift package, Xcode project, API client targeting LAN backend |
+| 16 | iOS auth | Not started | Login/register screens, bearer token storage in Keychain |
+| 17 | iOS calendar views | Not started | Month + week views in SwiftUI |
+| 18 | iOS event CRUD | Not started | Create/edit/delete events with sheets |
+| 19 | iOS smart input — voice | Not started | iOS Speech framework → parse endpoint → pre-fill event |
+| 20 | iOS notifications | Not started | Local reminders for upcoming events |
+
+## Phase 4: Future Enhancements (deferred)
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| — | Admin UI | Not started | User management page — low priority for small family use |
+| — | Web notifications | Not started | Reminders and alerts for upcoming events |
+| — | Cloud deploy | Not started | Docker Compose or Vercel + Fly.io |
+| — | Push notifications (APNs) | Not started | Requires backend device token storage |
 
 ## What's Working
 
@@ -47,7 +65,7 @@
 
 ## What's Next
 
-Task 13: LAN deploy (bind to 0.0.0.0, family access via local network).
+Task 13: LAN expose (bind Hono API to 0.0.0.0, verify access from other LAN devices).
 
 ## Reference Docs
 
