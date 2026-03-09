@@ -73,8 +73,10 @@ export function EventDialog({ date, event, onClose, onSaved }: EventDialogProps)
   // Set defaults when creating (date changes)
   useEffect(() => {
     if (date && !event) {
-      setStart(toLocalDatetime(date, 9));
-      setEnd(toLocalDatetime(date, 10));
+      const hours = date.getHours();
+      const startHour = hours > 0 ? hours : 9; // month clicks = midnight → default 9am
+      setStart(toLocalDatetime(date, startHour));
+      setEnd(toLocalDatetime(date, startHour + 1));
     }
   }, [date, event]);
 

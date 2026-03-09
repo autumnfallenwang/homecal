@@ -4,23 +4,24 @@ import { ChevronLeft, ChevronRight, LogOut, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
-import { formatMonthYear } from "@/lib/calendar-utils";
 
 interface CalendarHeaderProps {
-  year: number;
-  month: number;
+  title: string;
+  view: "month" | "week";
   userName: string;
-  onPrevMonth: () => void;
-  onNextMonth: () => void;
+  onPrev: () => void;
+  onNext: () => void;
+  onViewChange: (view: "month" | "week") => void;
   onNewEvent?: () => void;
 }
 
 export function CalendarHeader({
-  year,
-  month,
+  title,
+  view,
   userName,
-  onPrevMonth,
-  onNextMonth,
+  onPrev,
+  onNext,
+  onViewChange,
   onNewEvent,
 }: CalendarHeaderProps) {
   const router = useRouter();
@@ -32,18 +33,35 @@ export function CalendarHeader({
 
   return (
     <header className="flex items-center justify-between border-b px-4 py-2">
-      {/* Left: logo + month nav */}
+      {/* Left: logo + view toggle + nav */}
       <div className="flex items-center gap-4">
         <h1 className="text-lg font-bold">HomeCal</h1>
 
+        <div className="flex items-center rounded-md border">
+          <Button
+            variant={view === "month" ? "secondary" : "ghost"}
+            size="sm"
+            className="rounded-r-none"
+            onClick={() => onViewChange("month")}
+          >
+            Month
+          </Button>
+          <Button
+            variant={view === "week" ? "secondary" : "ghost"}
+            size="sm"
+            className="rounded-l-none"
+            onClick={() => onViewChange("week")}
+          >
+            Week
+          </Button>
+        </div>
+
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon-sm" onClick={onPrevMonth}>
+          <Button variant="ghost" size="icon-sm" onClick={onPrev}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="min-w-36 text-center text-sm font-medium">
-            {formatMonthYear(year, month)}
-          </span>
-          <Button variant="ghost" size="icon-sm" onClick={onNextMonth}>
+          <span className="min-w-36 text-center text-sm font-medium">{title}</span>
+          <Button variant="ghost" size="icon-sm" onClick={onNext}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>

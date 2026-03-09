@@ -13,17 +13,16 @@
 | 7 | Calendar month view | ✅ Done | 6x7 month grid (Mon start), color-coded event pills, member filter sidebar, prev/next nav, day-click create dialog |
 | 8 | Event create/edit/delete | ✅ Done | Unified EventDialog: create (POST), edit (PATCH), delete (DELETE) with inline confirmation |
 | 9 | Event change log UI | ✅ Done | `GET /api/events/:id/logs` endpoint, ChangeLog component, History section in EventDialog |
-| 10 | LAN deploy | Not started | Bind to 0.0.0.0, family access via local network |
+## Phase 2: Enhancements
 
-## Phase 2: Enhancements (future)
-
-| # | Task | Notes |
-|---|------|-------|
-| 11 | Week view | Hourly time-slot grid, toggle between month/week |
-| 12 | Admin UI | User management page (list/ban/remove users) — Better Auth admin plugin APIs already exist |
-| 13 | Smart input | LLM-powered input via llm-gateway (image/voice/text → structured events) |
-| 14 | Notifications | Reminders and alerts for upcoming events |
-| 15 | Mobile app | Swift iOS app calling same Hono API (Better Auth bearer token) |
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 10 | Week view | ✅ Done | 24-hour grid (scroll default 7AM), month/week toggle, click-to-create at hour, overlap handling |
+| 11 | Admin UI | Not started | User management page (list/ban/remove users) — Better Auth admin plugin APIs already exist |
+| 12 | Smart input | Not started | LLM-powered input via llm-gateway (image/voice/text → structured events) |
+| 13 | Notifications | Not started | Reminders and alerts for upcoming events |
+| 14 | LAN deploy | Not started | Bind to 0.0.0.0, family access via local network |
+| 15 | Mobile app | Not started | Swift iOS app calling same Hono API (Better Auth bearer token) |
 
 ## What's Working
 
@@ -41,10 +40,11 @@
 - Event creation: click day cell → modal with pre-filled date, title/start/end/private fields, auto-refetch on create
 - Event editing: click event pill → edit dialog pre-filled from event data, save (PATCH) updates pill, delete with inline confirmation
 - Event change log: `GET /api/events/:id/logs` with user join, History section in edit dialog for shared events (colored dots, relative timestamps, field-level diffs)
+- Week view: 24-hour scrollable grid (12AM–12AM, default scroll to 7AM), month/week toggle in header, click time slot → create event at that hour, overlapping events packed into columns, auto-anchors to current week on toggle
 
 ## What's Next
 
-Task 10: LAN deploy — bind to 0.0.0.0, family access via local network.
+Task 11: Admin UI — user management page (list/ban/remove users).
 
 ## Reference Docs
 

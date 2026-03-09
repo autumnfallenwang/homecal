@@ -43,3 +43,37 @@ export function formatMonthYear(year: number, month: number): string {
   const date = new Date(year, month, 1);
   return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
+
+/**
+ * Returns 7 dates (Mon–Sun) for the week containing `date`.
+ */
+export function getWeekDates(date: Date): Date[] {
+  const dayOfWeek = (date.getDay() + 6) % 7; // Mon=0
+  const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate() - dayOfWeek);
+  const dates: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    dates.push(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i));
+  }
+  return dates;
+}
+
+export function getWeekStart(weekDates: Date[]): string {
+  return weekDates[0].toISOString();
+}
+
+export function getWeekEnd(weekDates: Date[]): string {
+  const last = weekDates[weekDates.length - 1];
+  return new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1).toISOString();
+}
+
+export function formatWeekRange(weekDates: Date[]): string {
+  const first = weekDates[0];
+  const last = weekDates[weekDates.length - 1];
+  const monthShort = (d: Date) => d.toLocaleDateString("en-US", { month: "short" });
+  const year = last.getFullYear();
+
+  if (first.getMonth() === last.getMonth()) {
+    return `${monthShort(first)} ${first.getDate()} – ${last.getDate()}, ${year}`;
+  }
+  return `${monthShort(first)} ${first.getDate()} – ${monthShort(last)} ${last.getDate()}, ${year}`;
+}

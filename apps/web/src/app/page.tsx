@@ -5,10 +5,20 @@ import { CalendarHeader } from "@/components/calendar/calendar-header";
 import { EventDialog } from "@/components/calendar/event-dialog";
 import { MemberFilter } from "@/components/calendar/member-filter";
 import { MonthGrid } from "@/components/calendar/month-grid";
+import { WeekGrid } from "@/components/calendar/week-grid";
 import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 import { type CalendarEvent, useEvents } from "@/hooks/use-events";
 import { useMembers } from "@/hooks/use-members";
-import { getGridEnd, getGridStart, getMonthGridDates } from "@/lib/calendar-utils";
+import {
+  formatMonthYear,
+  formatWeekRange,
+  getGridEnd,
+  getGridStart,
+  getMonthGridDates,
+  getWeekDates,
+  getWeekEnd,
+  getWeekStart,
+} from "@/lib/calendar-utils";
 
 function currentYearMonth() {
   const now = new Date();
@@ -17,14 +27,24 @@ function currentYearMonth() {
 
 export default function HomePage() {
   const { session, isPending } = useAuthRedirect(true);
+  const [view, setView] = useState<"month" | "week">("month");
   const [{ year, month }, setYearMonth] = useState(currentYearMonth);
+  const [weekAnchor, setWeekAnchor] = useState(() => new Date());
   const [visibleMemberIds, setVisibleMemberIds] = useState<Set<string> | null>(null);
   const [dialogDate, setDialogDate] = useState<Date | null>(null);
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
 
   const gridDates = useMemo(() => getMonthGridDates(year, month), [year, month]);
-  const from = useMemo(() => getGridStart(gridDates), [gridDates]);
-  const to = useMemo(() => getGridEnd(gridDates), [gridDates]);
+  const weekDates = useMemo(() => getWeekDates(weekAnchor), [weekAnchor]);
+
+  const from = useMemo(
+    () => (view === "month" ? getGridStart(gridDates) : getWeekStart(weekDates)),
+    [view, gridDates, weekDates],
+  );
+  const to = useMemo(
+    () => (view === "month" ? getGridEnd(gridDates) : getWeekEnd(weekDates)),
+    [view, gridDates, weekDates],
+  );
 
   const { events, refetch } = useEvents(from, to);
   const { members, isLoading: membersLoading } = useMembers();
@@ -54,6 +74,33 @@ export default function HomePage() {
       return { year: prev.year, month: prev.month + 1 };
     });
   }, []);
+
+  const handlePrevWeek = useCallback(() => {
+    setWeekAnchor((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7));
+  }, []);
+
+  const handleNextWeek = useCallback(() => {
+    setWeekAnchor((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7));
+  }, []);
+
+  const handlePrev = view === "month" ? handlePrevMonth : handlePrevWeek;
+  const handleNext = view === "month" ? handleNextMonth : handleNextWeek;
+
+  const headerTitle = view === "month" ? formatMonthYear(year, month) : formatWeekRange(weekDates);
+
+  const handleViewChange = useCallback(
+    (newView: "month" | "week") => {
+      if (newView === view) return;
+      if (newView === "week") {
+        setWeekAnchor(new Date());
+      } else {
+        // Set month from week anchor
+        setYearMonth({ year: weekAnchor.getFullYear(), month: weekAnchor.getMonth() });
+      }
+      setView(newView);
+    },
+    [view, weekAnchor],
+  );
 
   const handleToggleMember = useCallback(
     (memberId: string) => {
@@ -87,6 +134,10 @@ export default function HomePage() {
     setDialogDate(date);
   }, []);
 
+  const handleSlotClick = useCallback((date: Date) => {
+    setDialogDate(date);
+  }, []);
+
   if (isPending || !session) {
     return null;
   }
@@ -94,11 +145,12 @@ export default function HomePage() {
   return (
     <div className="flex h-screen flex-col">
       <CalendarHeader
-        year={year}
-        month={month}
+        title={headerTitle}
+        view={view}
         userName={session.user.name}
-        onPrevMonth={handlePrevMonth}
-        onNextMonth={handleNextMonth}
+        onPrev={handlePrev}
+        onNext={handleNext}
+        onViewChange={handleViewChange}
         onNewEvent={handleNewEvent}
       />
       <div className="flex flex-1 overflow-hidden">
@@ -111,14 +163,24 @@ export default function HomePage() {
           />
         </aside>
         <main className="flex flex-1 overflow-auto p-4">
-          <MonthGrid
-            year={year}
-            month={month}
-            events={filteredEvents}
-            members={members}
-            onEventClick={handleEventClick}
-            onDayClick={handleDayClick}
-          />
+          {view === "month" ? (
+            <MonthGrid
+              year={year}
+              month={month}
+              events={filteredEvents}
+              members={members}
+              onEventClick={handleEventClick}
+              onDayClick={handleDayClick}
+            />
+          ) : (
+            <WeekGrid
+              weekDates={weekDates}
+              events={filteredEvents}
+              members={members}
+              onEventClick={handleEventClick}
+              onSlotClick={handleSlotClick}
+            />
+          )}
         </main>
       </div>
       <EventDialog
