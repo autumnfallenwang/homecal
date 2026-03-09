@@ -1,10 +1,16 @@
-import { createEventSchema, eventQuerySchema, updateEventSchema } from "@homecal/shared";
+import {
+  createEventSchema,
+  eventQuerySchema,
+  parseEventInputSchema,
+  updateEventSchema,
+} from "@homecal/shared";
 import { and, desc, eq, gte, lte, or } from "drizzle-orm";
 import { Hono } from "hono";
 import type { auth } from "../auth.js";
 import { db } from "../db/index.js";
 import { eventLogs, events, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
+import { buildParsePrompt, callLlm, parseLlmResponse } from "../services/llm.js";
 
 type Session = typeof auth.$Infer.Session;
 
@@ -14,6 +20,35 @@ export const eventsApp = new Hono<{
 }>();
 
 eventsApp.use(requireAuth);
+
+// POST /parse — Parse natural language into event fields
+eventsApp.post("/parse", async (c) => {
+  const body = await c.req.json();
+  const parsed = parseEventInputSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.issues }, 400);
+  }
+
+  const gatewayUrl = process.env.LLM_GATEWAY_URL || "http://localhost:51277";
+  const model = process.env.LLM_MODEL || "claude-haiku-4-5";
+  const fallbackModel = process.env.LLM_FALLBACK_MODEL || "gemma3:27b";
+  const today = new Date().toISOString().split("T")[0];
+
+  try {
+    const systemPrompt = buildParsePrompt(today);
+    let raw: string;
+    try {
+      raw = await callLlm({ gatewayUrl, model }, systemPrompt, parsed.data.text);
+    } catch {
+      raw = await callLlm({ gatewayUrl, model: fallbackModel }, systemPrompt, parsed.data.text);
+    }
+    const result = parseLlmResponse(raw);
+    return c.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "LLM parsing failed";
+    return c.json({ error: message }, 502);
+  }
+});
 
 // POST / — Create event
 eventsApp.post("/", async (c) => {

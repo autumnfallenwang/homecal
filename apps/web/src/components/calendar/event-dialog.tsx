@@ -17,9 +17,16 @@ import { Switch } from "@/components/ui/switch";
 import { useEventLogs } from "@/hooks/use-event-logs";
 import type { CalendarEvent } from "@/hooks/use-events";
 
+export interface ParsedEvent {
+  title: string;
+  start: string;
+  end: string;
+}
+
 interface EventDialogProps {
   date: Date | null;
   event: CalendarEvent | null;
+  parsedEvent?: ParsedEvent | null;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -37,7 +44,7 @@ function isoToLocalDatetime(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function EventDialog({ date, event, onClose, onSaved }: EventDialogProps) {
+export function EventDialog({ date, event, parsedEvent, onClose, onSaved }: EventDialogProps) {
   const [title, setTitle] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
@@ -70,15 +77,25 @@ export function EventDialog({ date, event, onClose, onSaved }: EventDialogProps)
     setConfirmingDelete(false);
   }
 
+  // Pre-fill from smart input — LLM returns UTC times that represent the user's
+  // intended local time, so extract YYYY-MM-DDTHH:MM directly without Date conversion
+  useEffect(() => {
+    if (parsedEvent && date && !event) {
+      setTitle(parsedEvent.title);
+      setStart(parsedEvent.start.slice(0, 16));
+      setEnd(parsedEvent.end.slice(0, 16));
+    }
+  }, [parsedEvent, date, event]);
+
   // Set defaults when creating (date changes)
   useEffect(() => {
-    if (date && !event) {
+    if (date && !event && !parsedEvent) {
       const hours = date.getHours();
       const startHour = hours > 0 ? hours : 9; // month clicks = midnight → default 9am
       setStart(toLocalDatetime(date, startHour));
       setEnd(toLocalDatetime(date, startHour + 1));
     }
-  }, [date, event]);
+  }, [date, event, parsedEvent]);
 
   // Pre-populate form when editing
   useEffect(() => {

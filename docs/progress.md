@@ -18,16 +18,17 @@
 | # | Task | Status | Notes |
 |---|------|--------|-------|
 | 10 | Week view | ✅ Done | 24-hour grid (scroll default 7AM), month/week toggle, click-to-create at hour, overlap handling |
-| 11 | Admin UI | Not started | User management page (list/ban/remove users) — Better Auth admin plugin APIs already exist |
-| 12 | Smart input | Not started | LLM-powered input via llm-gateway (image/voice/text → structured events) |
-| 13 | Notifications | Not started | Reminders and alerts for upcoming events |
-| 14 | LAN deploy | Not started | Bind to 0.0.0.0, family access via local network |
-| 15 | Mobile app | Not started | Swift iOS app calling same Hono API (Better Auth bearer token) |
+| 11 | Smart input — backend | ✅ Done | `POST /api/events/parse` — text → LLM (llm-gateway) → `{ title, start, end }`, shared schemas, unit + integration tests |
+| 12 | Smart input — frontend | ✅ Done | CalendarHeader smart input field, EventDialog parsedEvent pre-fill, Haiku default + Gemma fallback |
+| 13 | LAN deploy | Not started | Bind to 0.0.0.0, family access via local network |
+| 14 | Notifications | Not started | Reminders and alerts for upcoming events |
+| 15 | Admin UI | Not started | User management page — low priority for small family use |
+| 16 | Mobile app | Not started | Swift iOS app calling same Hono API (Better Auth bearer token) |
 
 ## What's Working
 
 - Monorepo: `apps/api` (Hono, port 3001), `apps/web` (Next.js, port 3000), `packages/shared`
-- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (117 tests: unit + integration)
+- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (142 tests: unit + integration)
 - Docker PostgreSQL: `scripts/db-start.sh` / `db-stop.sh` / `db-reset.sh`
 - Auth: signup, signin, signout, session check, admin plugin, `requireAuth` middleware
 - Events CRUD: 5 endpoints with visibility rules, Zod validation, change logging, date range filtering
@@ -41,10 +42,12 @@
 - Event editing: click event pill → edit dialog pre-filled from event data, save (PATCH) updates pill, delete with inline confirmation
 - Event change log: `GET /api/events/:id/logs` with user join, History section in edit dialog for shared events (colored dots, relative timestamps, field-level diffs)
 - Week view: 24-hour scrollable grid (12AM–12AM, default scroll to 7AM), month/week toggle in header, click time slot → create event at that hour, overlapping events packed into columns, auto-anchors to current week on toggle
+- Smart input backend: `POST /api/events/parse` with LLM service (prompt builder, response parser, gateway client), `parseEventInputSchema`/`parsedEventSchema` in shared package, env config for `LLM_GATEWAY_URL`/`LLM_MODEL`
+- Smart input frontend: CalendarHeader text input with sparkles button (hidden on small screens), calls parse endpoint, pre-fills EventDialog with parsed title/start/end, Haiku default with Gemma fallback
 
 ## What's Next
 
-Task 11: Admin UI — user management page (list/ban/remove users).
+Task 13: LAN deploy (bind to 0.0.0.0, family access via local network).
 
 ## Reference Docs
 

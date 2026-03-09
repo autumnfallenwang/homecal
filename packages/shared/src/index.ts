@@ -23,6 +23,18 @@ export const eventQuerySchema = z.object({
   to: z.iso.datetime().optional(),
 });
 
+export const parseEventInputSchema = z.object({
+  text: z.string().min(1).max(500),
+});
+
+export const parsedEventSchema = z.object({
+  title: z.string().min(1).max(200),
+  start: z.iso.datetime(),
+  end: z.iso.datetime(),
+});
+
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type EventQuery = z.infer<typeof eventQuerySchema>;
+export type ParseEventInput = z.infer<typeof parseEventInputSchema>;
+export type ParsedEvent = z.infer<typeof parsedEventSchema>;

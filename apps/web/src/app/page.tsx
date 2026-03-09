@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { CalendarHeader } from "@/components/calendar/calendar-header";
-import { EventDialog } from "@/components/calendar/event-dialog";
+import { EventDialog, type ParsedEvent } from "@/components/calendar/event-dialog";
 import { MemberFilter } from "@/components/calendar/member-filter";
 import { MonthGrid } from "@/components/calendar/month-grid";
 import { WeekGrid } from "@/components/calendar/week-grid";
@@ -33,6 +33,8 @@ export default function HomePage() {
   const [visibleMemberIds, setVisibleMemberIds] = useState<Set<string> | null>(null);
   const [dialogDate, setDialogDate] = useState<Date | null>(null);
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
+  const [parsedEvent, setParsedEvent] = useState<ParsedEvent | null>(null);
+  const [smartInputLoading, setSmartInputLoading] = useState(false);
 
   const gridDates = useMemo(() => getMonthGridDates(year, month), [year, month]);
   const weekDates = useMemo(() => getWeekDates(weekAnchor), [weekAnchor]);
@@ -118,6 +120,26 @@ export default function HomePage() {
     [members],
   );
 
+  const handleSmartInput = useCallback(async (text: string) => {
+    setSmartInputLoading(true);
+    try {
+      const res = await fetch("/api/events/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) throw new Error("Parse failed");
+      const data = await res.json();
+      setParsedEvent({ title: data.title, start: data.start, end: data.end });
+      setDialogDate(new Date());
+    } catch (err) {
+      console.error("Smart input error:", err);
+    } finally {
+      setSmartInputLoading(false);
+    }
+  }, []);
+
   const handleNewEvent = useCallback(() => {
     setDialogDate(new Date());
   }, []);
@@ -152,6 +174,8 @@ export default function HomePage() {
         onNext={handleNext}
         onViewChange={handleViewChange}
         onNewEvent={handleNewEvent}
+        onSmartInput={handleSmartInput}
+        smartInputLoading={smartInputLoading}
       />
       <div className="flex flex-1 overflow-hidden">
         <aside className="hidden w-60 border-r p-4 lg:block">
@@ -186,9 +210,11 @@ export default function HomePage() {
       <EventDialog
         date={dialogDate}
         event={editEvent}
+        parsedEvent={parsedEvent}
         onClose={() => {
           setDialogDate(null);
           setEditEvent(null);
+          setParsedEvent(null);
         }}
         onSaved={refetch}
       />
