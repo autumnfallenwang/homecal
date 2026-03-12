@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { admin } from "better-auth/plugins";
+import { admin, bearer } from "better-auth/plugins";
 import { count } from "drizzle-orm";
 import { db } from "./db/index.js";
 import * as schema from "./db/schema.js";
@@ -11,7 +11,9 @@ export const auth = betterAuth({
     usePlural: true,
     schema,
   }),
-  trustedOrigins: ["http://localhost:3000"],
+  trustedOrigins: process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(",").map((o) => o.trim())
+    : ["http://localhost:3000"],
   emailAndPassword: { enabled: true },
   user: {
     additionalFields: {
@@ -27,7 +29,7 @@ export const auth = betterAuth({
       generateId: false, // PostgreSQL generates UUIDs
     },
   },
-  plugins: [admin()],
+  plugins: [admin(), bearer()],
   databaseHooks: {
     user: {
       create: {

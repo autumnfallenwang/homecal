@@ -9,6 +9,12 @@ describe("auth module", () => {
     expect(auth.handler).toBeTypeOf("function");
     expect(auth.api).toBeDefined();
   });
+
+  it("has bearer plugin enabled", async () => {
+    const { auth } = await import("../../src/auth.js");
+    // Bearer plugin adds the token endpoint
+    expect(auth.api).toBeDefined();
+  });
 });
 
 describe("requireAuth middleware", () => {

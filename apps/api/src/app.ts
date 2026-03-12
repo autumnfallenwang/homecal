@@ -7,10 +7,14 @@ import { usersApp } from "./routes/users.js";
 
 export const app = new Hono();
 
+const corsOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(",").map((o) => o.trim())
+  : ["http://localhost:3000"];
+
 app.use(
   "/*",
   cors({
-    origin: "http://localhost:3000",
+    origin: corsOrigins,
     credentials: true,
   }),
 );

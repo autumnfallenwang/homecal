@@ -248,6 +248,63 @@ describe("admin role", () => {
   });
 });
 
+describe("bearer token auth", () => {
+  function getSessionToken(res: Response): string | undefined {
+    const setCookie = res.headers.get("set-cookie");
+    if (!setCookie) return undefined;
+    const match = setCookie.match(/better-auth\.session_token=([^;]+)/);
+    return match?.[1];
+  }
+
+  it("get-session works with bearer token", async () => {
+    const signUpRes = await signUp({
+      name: "Alice",
+      email: "alice@test.com",
+      password: "password123",
+      color: "#ff0000",
+    });
+
+    const token = getSessionToken(signUpRes);
+    expect(token).toBeDefined();
+
+    const sessionRes = await req("/api/auth/get-session", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(sessionRes.status).toBe(200);
+    const body = await sessionRes.json();
+    expect(body.user.email).toBe("alice@test.com");
+  });
+
+  it("protected route works with bearer token", async () => {
+    const signUpRes = await signUp({
+      name: "Alice",
+      email: "alice@test.com",
+      password: "password123",
+      color: "#ff0000",
+    });
+
+    const token = getSessionToken(signUpRes);
+    expect(token).toBeDefined();
+
+    const res = await app.request("/protected-test", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.user.email).toBe("alice@test.com");
+  });
+
+  it("returns 401 with invalid bearer token", async () => {
+    const res = await app.request("/protected-test", {
+      headers: { Authorization: "Bearer invalid-token-12345" },
+    });
+
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("protected routes", () => {
   it("returns 401 without session", async () => {
     const res = await app.request("/protected-test");
