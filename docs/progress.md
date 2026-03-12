@@ -25,8 +25,8 @@
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 13 | LAN expose | Not started | Bind Hono API to 0.0.0.0, verify LAN access from other devices |
-| 14 | Better Auth bearer tokens | Not started | Enable token-based auth for mobile clients |
+| 13 | LAN expose | ✅ Done | API accessible from LAN at 192.168.1.163:3001, web frontend proxies to Arch backend via env config |
+| 14 | Better Auth bearer tokens | ✅ Done | Bearer plugin, configurable CORS/trusted origins via `CORS_ORIGINS` env var, integration tests |
 | 15 | iOS project setup | Not started | Swift package, Xcode project, API client targeting LAN backend |
 | 16 | iOS auth | Not started | Login/register screens, bearer token storage in Keychain |
 | 17 | iOS calendar views | Not started | Month + week views in SwiftUI |
@@ -46,14 +46,14 @@
 ## What's Working
 
 - Monorepo: `apps/api` (Hono, port 3001), `apps/web` (Next.js, port 3000), `packages/shared`
-- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (142 tests: unit + integration)
+- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (146 tests: unit + integration)
 - Docker PostgreSQL: `scripts/db-start.sh` / `db-stop.sh` / `db-reset.sh`
-- Auth: signup, signin, signout, session check, admin plugin, `requireAuth` middleware
+- Auth: signup, signin, signout, session check, admin plugin, bearer token plugin, `requireAuth` middleware (cookies + bearer)
 - Events CRUD: 5 endpoints with visibility rules, Zod validation, change logging, date range filtering
 - Users list: `GET /api/users` returns `[{ id, name, color }]` ordered by name, auth-protected
 - Frontend: Tailwind v4 + shadcn/ui (Button, Input, Label, Card, Checkbox, Skeleton, Dialog, Switch), login/register/home pages
 - Auth flow: register → auto-login → home; login → home; sign out → login; session-based redirects
-- Next.js API proxy (`/api/*` → `localhost:3001`) avoids cross-origin cookie issues
+- Next.js API proxy (`/api/*` → backend) via `NEXT_PUBLIC_API_URL` env var, avoids cross-origin cookie issues
 - Calendar month view: 42-cell grid (6 rows x 7 cols, Monday start), month navigation, member filter sidebar with color dots
 - Event pills: colored by owner (20% opacity bg), max 3 per cell with "+N more" overflow
 - Event creation: click day cell → modal with pre-filled date, title/start/end/private fields, auto-refetch on create
@@ -63,9 +63,15 @@
 - Smart input backend: `POST /api/events/parse` with LLM service (prompt builder, response parser, gateway client), `parseEventInputSchema`/`parsedEventSchema` in shared package, env config for `LLM_GATEWAY_URL`/`LLM_MODEL`
 - Smart input frontend: CalendarHeader text input with sparkles button (hidden on small screens), calls parse endpoint, pre-fills EventDialog with parsed title/start/end, Haiku default with Gemma fallback
 
+- LAN setup: Arch Linux (192.168.1.163) runs backend (API + DB + LLM), Mac Air runs web frontend + iOS dev
+- Web env config: `apps/web/.env.example` with `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_AUTH_URL`, `.env` gitignored
+- Mac iOS dev ready: Xcode 26.3, Swift 6.2, iPhone simulators (17 Pro, 17, Air, 16e)
+- Bearer auth: `Authorization: Bearer <token>` header works for get-session and protected routes, configurable CORS origins via `CORS_ORIGINS` env var
+- SSH from Mac to Arch: passwordless key-based auth for remote test/deploy
+
 ## What's Next
 
-Task 13: LAN expose (bind Hono API to 0.0.0.0, verify access from other LAN devices).
+Task 15: iOS project setup (Swift package, Xcode project, API client targeting LAN backend).
 
 ## Reference Docs
 
