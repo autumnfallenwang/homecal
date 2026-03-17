@@ -1,6 +1,6 @@
 ---
 name: commit
-description: Git commit with conventional format
+description: Git commit with conventional format. Use when the user wants to commit, save progress, push changes, or says "commit", "save this", "push it", or "ship it".
 ---
 
 ## Step 1: Verify → `/check fast`

@@ -1,6 +1,6 @@
 ---
 name: update-progress
-description: Update the progress doc after finishing work
+description: Update the progress doc after finishing work. Use when the user finishes a task, wants to sync progress, or says "update progress", "mark it done", or "what's the status now".
 ---
 
 Update `docs/progress.md` to reflect the current state of the project.

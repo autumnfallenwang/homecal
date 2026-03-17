@@ -1,5 +1,33 @@
 {
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "case \"$CLAUDE_FILE_PATH\" in *.env|*.env.*) echo 'BLOCKED: Do not edit .env files — they may contain secrets. Use .env.example instead.' >&2; exit 2;; esac; exit 0"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "case \"$CLAUDE_FILE_PATH\" in *.ts|*.tsx|*.js|*.jsx|*.json) pnpm biome check --write \"$CLAUDE_FILE_PATH\" 2>/dev/null; exit 0;; *.swift) cd apps/ios/HomeCal.swiftpm && swiftlint --fix \"$CLAUDE_FILE_PATH\" 2>/dev/null; exit 0;; *) exit 0;; esac"
+          }
+        ]
+      }
+    ]
+  },
   "enabledPlugins": {
-    "typescript-lsp@claude-plugins-official": true
+    "typescript-lsp@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true,
+    "claude-code-setup@claude-plugins-official": true,
+    "swift-lsp@claude-plugins-official": true,
+    "context7@claude-plugins-official": true
   }
 }
