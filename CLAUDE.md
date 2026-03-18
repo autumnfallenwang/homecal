@@ -33,6 +33,7 @@ All commands run from the repo root via Turborepo:
 
 ### iOS / Swift commands
 
+- **First-time setup**: `cp apps/ios/HomeCal.swiftpm/Sources/HomeCalKit/LocalConfig.swift.example apps/ios/HomeCal.swiftpm/Sources/HomeCalKit/LocalConfig.swift` — then edit with your LAN IP
 - `cd apps/ios/HomeCal.swiftpm && xcodebuild build -scheme HomeCal -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -quiet` — build iOS app
 - `cd apps/ios/HomeCal.swiftpm && swiftlint` — lint Swift code
 - `cd apps/ios/HomeCal.swiftpm && swift test` — run Swift tests (when test target exists)

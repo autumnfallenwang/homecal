@@ -1,0 +1,6 @@
+// Copy this file to LocalConfig.swift and fill in your values.
+// LocalConfig.swift is gitignored — do not commit it.
+import Foundation
+
+// swiftlint:disable:next force_unwrapping
+let localAPIBaseURL = URL(string: "http://localhost:3001")!

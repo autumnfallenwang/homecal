@@ -149,6 +149,10 @@ vite.config.ts.timestamp-*
 *.swp
 *~
 
+# iOS local config (contains LAN IP — like .env for Swift)
+# Copy LocalConfig.swift.example → LocalConfig.swift and fill in real values
+LocalConfig.swift
+
 # iOS / Xcode / Swift
 *.xcuserstate
 *.xcuserdatad/
