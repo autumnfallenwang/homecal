@@ -1,14 +1,14 @@
 import Foundation
 
-actor APIClient {
-    let baseURL: URL
+public actor APIClient {
+    public let baseURL: URL
     private let session: URLSession
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
 
-    var bearerToken: String?
+    public var bearerToken: String?
 
-    init(baseURL: URL = Configuration.apiBaseURL) {
+    public init(baseURL: URL = Configuration.apiBaseURL) {
         self.baseURL = baseURL
         self.session = URLSession.shared
         self.decoder = JSONDecoder()
@@ -120,9 +120,13 @@ actor APIClient {
         }
     }
 
+    public func setBearerToken(_ token: String?) {
+        bearerToken = token
+    }
+
     // MARK: - Health
 
-    func healthCheck() async throws -> String {
+    public func healthCheck() async throws -> String {
         struct HealthResponse: Decodable {
             let status: String
         }
@@ -132,7 +136,7 @@ actor APIClient {
 
     // MARK: - Auth
 
-    func signUp(_ input: SignUpRequest) async throws -> AuthResponse {
+    public func signUp(_ input: SignUpRequest) async throws -> AuthResponse {
         try await request(
             method: "POST",
             path: "/api/auth/sign-up/email",
@@ -141,7 +145,7 @@ actor APIClient {
         )
     }
 
-    func signIn(_ input: SignInRequest) async throws -> AuthResponse {
+    public func signIn(_ input: SignInRequest) async throws -> AuthResponse {
         try await request(
             method: "POST",
             path: "/api/auth/sign-in/email",
@@ -150,18 +154,18 @@ actor APIClient {
         )
     }
 
-    func signOut() async throws {
+    public func signOut() async throws {
         try await requestNoContent(method: "POST", path: "/api/auth/sign-out")
         bearerToken = nil
     }
 
-    func getSession() async throws -> SessionResponse {
+    public func getSession() async throws -> SessionResponse {
         try await request(method: "GET", path: "/api/auth/get-session")
     }
 
     // MARK: - Events
 
-    func fetchEvents(from: String? = nil, to: String? = nil) async throws -> [CalendarEvent] {
+    public func fetchEvents(from: String? = nil, to: String? = nil) async throws -> [CalendarEvent] {
         var path = "/api/events"
         var queryItems: [String] = []
         if let from { queryItems.append("from=\(from)") }
@@ -172,46 +176,46 @@ actor APIClient {
         return try await request(method: "GET", path: path)
     }
 
-    func getEvent(id: String) async throws -> CalendarEventWithOwner {
+    public func getEvent(id: String) async throws -> CalendarEventWithOwner {
         try await request(method: "GET", path: "/api/events/\(id)")
     }
 
-    func createEvent(_ input: CreateEventInput) async throws -> CalendarEvent {
+    public func createEvent(_ input: CreateEventInput) async throws -> CalendarEvent {
         try await request(method: "POST", path: "/api/events", body: input)
     }
 
-    func updateEvent(id: String, _ input: UpdateEventInput) async throws -> CalendarEvent {
+    public func updateEvent(id: String, _ input: UpdateEventInput) async throws -> CalendarEvent {
         try await request(method: "PATCH", path: "/api/events/\(id)", body: input)
     }
 
-    func deleteEvent(id: String) async throws {
+    public func deleteEvent(id: String) async throws {
         try await requestNoContent(method: "DELETE", path: "/api/events/\(id)")
     }
 
-    func getEventLogs(eventId: String) async throws -> [EventLogEntry] {
+    public func getEventLogs(eventId: String) async throws -> [EventLogEntry] {
         try await request(method: "GET", path: "/api/events/\(eventId)/logs")
     }
 
     // MARK: - Members
 
-    func fetchMembers() async throws -> [Member] {
+    public func fetchMembers() async throws -> [Member] {
         try await request(method: "GET", path: "/api/users")
     }
 
     // MARK: - Parse
 
-    func parseEvent(_ input: ParseEventInput) async throws -> ParsedEvent {
+    public func parseEvent(_ input: ParseEventInput) async throws -> ParsedEvent {
         try await request(method: "POST", path: "/api/events/parse", body: input)
     }
 }
 
 // MARK: - Errors
 
-enum APIError: LocalizedError {
+public enum APIError: LocalizedError {
     case invalidResponse
     case httpError(statusCode: Int, message: String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .invalidResponse:
             return "Invalid server response"

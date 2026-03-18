@@ -33,7 +33,7 @@ All commands run from the repo root via Turborepo:
 
 ### iOS / Swift commands
 
-- `cd apps/ios/HomeCal.swiftpm && xcodebuild build -scheme HomeCal -destination 'platform=iOS Simulator,name=iPhone 16' -quiet` — build iOS app
+- `cd apps/ios/HomeCal.swiftpm && xcodebuild build -scheme HomeCal -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -quiet` — build iOS app
 - `cd apps/ios/HomeCal.swiftpm && swiftlint` — lint Swift code
 - `cd apps/ios/HomeCal.swiftpm && swift test` — run Swift tests (when test target exists)
 

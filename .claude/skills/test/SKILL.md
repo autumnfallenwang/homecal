@@ -21,6 +21,6 @@ Run tests for the relevant platform(s). Show failures clearly with file and line
 
 Skip if `apps/ios/` doesn't exist or `which xcodebuild` fails. Note what's missing and continue.
 
-- Run: `cd apps/ios/HomeCal.swiftpm && xcodebuild test -scheme HomeCal -destination 'platform=iOS Simulator,name=iPhone 16' -quiet`
+- Run: `cd apps/ios/HomeCal.swiftpm && xcodebuild test -scheme HomeCal -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -quiet`
 
 Report results from both platforms when running all.

@@ -1,4 +1,4 @@
-@testable import AppModule
+@testable import HomeCalKit
 import Testing
 
 @Suite("Configuration")

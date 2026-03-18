@@ -27,8 +27,8 @@
 |---|------|--------|-------|
 | 13 | LAN expose | ✅ Done | API accessible from LAN at 192.168.1.163:3001, web frontend proxies to Arch backend via env config |
 | 14 | Better Auth bearer tokens | ✅ Done | Bearer plugin, configurable CORS/trusted origins via `CORS_ORIGINS` env var, integration tests |
-| 15 | iOS project setup | Not started | Swift package, Xcode project, API client targeting LAN backend |
-| 16 | iOS auth | Not started | Login/register screens, bearer token storage in Keychain |
+| 15 | iOS project setup | ✅ Done | Swift package (SPM), APIClient actor with all endpoints, data models, health check UI, SwiftLint + test target |
+| 16 | iOS auth | ✅ Done | LoginView + RegisterView (with ColorPicker), KeychainService, AuthManager (@Observable), HomeView placeholder, 5 Swift tests |
 | 17 | iOS calendar views | Not started | Month + week views in SwiftUI |
 | 18 | iOS event CRUD | Not started | Create/edit/delete events with sheets |
 | 19 | iOS smart input — voice | Not started | iOS Speech framework → parse endpoint → pre-fill event |
@@ -45,33 +45,25 @@
 
 ## What's Working
 
-- Monorepo: `apps/api` (Hono, port 3001), `apps/web` (Next.js, port 3000), `packages/shared`
-- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (146 tests: unit + integration)
+- Monorepo: `apps/api` (Hono, port 3001), `apps/web` (Next.js, port 3000), `apps/ios` (SwiftUI), `packages/shared`
+- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (63 unit tests + integration tests; 5 Swift tests)
 - Docker PostgreSQL: `scripts/db-start.sh` / `db-stop.sh` / `db-reset.sh`
 - Auth: signup, signin, signout, session check, admin plugin, bearer token plugin, `requireAuth` middleware (cookies + bearer)
 - Events CRUD: 5 endpoints with visibility rules, Zod validation, change logging, date range filtering
 - Users list: `GET /api/users` returns `[{ id, name, color }]` ordered by name, auth-protected
-- Frontend: Tailwind v4 + shadcn/ui (Button, Input, Label, Card, Checkbox, Skeleton, Dialog, Switch), login/register/home pages
-- Auth flow: register → auto-login → home; login → home; sign out → login; session-based redirects
-- Next.js API proxy (`/api/*` → backend) via `NEXT_PUBLIC_API_URL` env var, avoids cross-origin cookie issues
-- Calendar month view: 42-cell grid (6 rows x 7 cols, Monday start), month navigation, member filter sidebar with color dots
-- Event pills: colored by owner (20% opacity bg), max 3 per cell with "+N more" overflow
-- Event creation: click day cell → modal with pre-filled date, title/start/end/private fields, auto-refetch on create
-- Event editing: click event pill → edit dialog pre-filled from event data, save (PATCH) updates pill, delete with inline confirmation
-- Event change log: `GET /api/events/:id/logs` with user join, History section in edit dialog for shared events (colored dots, relative timestamps, field-level diffs)
-- Week view: 24-hour scrollable grid (12AM–12AM, default scroll to 7AM), month/week toggle in header, click time slot → create event at that hour, overlapping events packed into columns, auto-anchors to current week on toggle
-- Smart input backend: `POST /api/events/parse` with LLM service (prompt builder, response parser, gateway client), `parseEventInputSchema`/`parsedEventSchema` in shared package, env config for `LLM_GATEWAY_URL`/`LLM_MODEL`
-- Smart input frontend: CalendarHeader text input with sparkles button (hidden on small screens), calls parse endpoint, pre-fills EventDialog with parsed title/start/end, Haiku default with Gemma fallback
-
-- LAN setup: Arch Linux (192.168.1.163) runs backend (API + DB + LLM), Mac Air runs web frontend + iOS dev
-- Web env config: `apps/web/.env.example` with `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_AUTH_URL`, `.env` gitignored
-- Mac iOS dev ready: Xcode 26.3, Swift 6.2, iPhone simulators (17 Pro, 17, Air, 16e)
-- Bearer auth: `Authorization: Bearer <token>` header works for get-session and protected routes, configurable CORS origins via `CORS_ORIGINS` env var
-- SSH from Mac to Arch: passwordless key-based auth for remote test/deploy
+- Frontend: Tailwind v4 + shadcn/ui, login/register/home pages, auth redirect hook
+- Calendar month view: 42-cell grid (Mon start), color-coded event pills, member filter sidebar, prev/next nav
+- Calendar week view: 24-hour scrollable grid, month/week toggle, click-to-create, overlap handling
+- Event create/edit/delete: unified EventDialog with inline confirmation, change log history
+- Smart input: `POST /api/events/parse` with LLM service, CalendarHeader text input, Haiku default + Gemma fallback
+- LAN setup: Arch Linux (192.168.1.163) backend, Mac Air web frontend + iOS dev
+- Bearer auth: configurable CORS origins via `CORS_ORIGINS` env var
+- iOS app: Swift package (SPM, iOS 18+), actor-based APIClient with all endpoints (auth, events CRUD, members, parse), data models, SwiftLint config, test target
+- iOS auth: Login/Register SwiftUI screens, Keychain token persistence, @Observable AuthManager with session restore, ColorPicker for user color, auth-gated root view
 
 ## What's Next
 
-Task 15: iOS project setup (Swift package, Xcode project, API client targeting LAN backend).
+Task 17: iOS calendar views — month + week views in SwiftUI.
 
 ## Reference Docs
 

@@ -30,12 +30,16 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "AppModule",
-            path: ".",
-            exclude: ["Tests"]
+            dependencies: ["HomeCalKit"],
+            path: "Sources/App"
+        ),
+        .target(
+            name: "HomeCalKit",
+            path: "Sources/HomeCalKit"
         ),
         .testTarget(
             name: "HomeCalTests",
-            dependencies: ["AppModule"],
+            dependencies: ["HomeCalKit"],
             path: "Tests"
         )
     ]

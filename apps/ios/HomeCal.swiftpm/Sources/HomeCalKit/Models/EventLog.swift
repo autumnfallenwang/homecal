@@ -1,22 +1,22 @@
 import Foundation
 
-struct EventLogEntry: Decodable, Identifiable, Sendable {
-    let id: String
-    let eventId: String
-    let userId: String
-    let action: String
-    let changes: [String: JSONValue]?
-    let timestamp: Date
-    let user: EventLogUser
+public struct EventLogEntry: Decodable, Identifiable, Sendable {
+    public let id: String
+    public let eventId: String
+    public let userId: String
+    public let action: String
+    public let changes: [String: JSONValue]?
+    public let timestamp: Date
+    public let user: EventLogUser
 }
 
-struct EventLogUser: Decodable, Sendable {
-    let id: String
-    let name: String
-    let color: String
+public struct EventLogUser: Decodable, Sendable {
+    public let id: String
+    public let name: String
+    public let color: String
 }
 
-enum JSONValue: Sendable {
+public enum JSONValue: Sendable {
     case string(String)
     case int(Int)
     case double(Double)
@@ -25,7 +25,7 @@ enum JSONValue: Sendable {
 }
 
 extension JSONValue: Decodable {
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() {
             self = .null

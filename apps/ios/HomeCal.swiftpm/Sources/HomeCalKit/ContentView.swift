@@ -1,10 +1,12 @@
 import SwiftUI
 
-struct ContentView: View {
+public struct ContentView: View {
     @State private var healthStatus: String = "Not checked"
     @State private var isChecking = false
 
-    var body: some View {
+    public init() {}
+
+    public var body: some View {
         VStack(spacing: 24) {
             Text("HomeCal")
                 .font(.largeTitle.bold())

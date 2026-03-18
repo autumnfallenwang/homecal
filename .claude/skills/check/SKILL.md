@@ -22,7 +22,7 @@ Run all checks and report results. Stop on first failure.
 Skip if `apps/ios/` doesn't exist or `which xcodebuild` fails (no Xcode). Note what's missing and continue with TS checks only.
 
 1. Run `/lint swift`
-2. Build check: `cd apps/ios/HomeCal.swiftpm && xcodebuild build -scheme HomeCal -destination 'platform=iOS Simulator,name=iPhone 16' -quiet` (this catches type errors)
+2. Build check: `cd apps/ios/HomeCal.swiftpm && xcodebuild build -scheme HomeCal -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -quiet` (this catches type errors)
 3. Run `/test swift` (if test target exists)
 
 If no arguments provided, default to fast tests.
