@@ -9,7 +9,7 @@ public final class AuthManager: @unchecked Sendable {
         currentUser != nil
     }
 
-    private let apiClient = APIClient()
+    public let apiClient = APIClient()
 
     public init() {
         Task {

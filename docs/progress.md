@@ -29,7 +29,7 @@
 | 14 | Better Auth bearer tokens | ✅ Done | Bearer plugin, configurable CORS/trusted origins via `CORS_ORIGINS` env var, integration tests |
 | 15 | iOS project setup | ✅ Done | Swift package (SPM), APIClient actor with all endpoints, data models, health check UI, SwiftLint + test target |
 | 16 | iOS auth | ✅ Done | LoginView + RegisterView (with ColorPicker), KeychainService, AuthManager (@Observable), HomeView placeholder, 5 Swift tests |
-| 17 | iOS calendar views | Not started | Month + week views in SwiftUI |
+| 17 | iOS calendar views | ✅ Done | Month grid + week grid in SwiftUI, CalendarViewModel, event pills, member filter, overlap handling, 7 Swift tests |
 | 18 | iOS event CRUD | Not started | Create/edit/delete events with sheets |
 | 19 | iOS smart input — voice | Not started | iOS Speech framework → parse endpoint → pre-fill event |
 | 20 | iOS notifications | Not started | Local reminders for upcoming events |
@@ -46,7 +46,7 @@
 ## What's Working
 
 - Monorepo: `apps/api` (Hono, port 3001), `apps/web` (Next.js, port 3000), `apps/ios` (SwiftUI), `packages/shared`
-- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (63 unit tests + integration tests; 5 Swift tests)
+- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (63 unit tests + integration tests; 13 Swift tests)
 - Docker PostgreSQL: `scripts/db-start.sh` / `db-stop.sh` / `db-reset.sh`
 - Auth: signup, signin, signout, session check, admin plugin, bearer token plugin, `requireAuth` middleware (cookies + bearer)
 - Events CRUD: 5 endpoints with visibility rules, Zod validation, change logging, date range filtering
@@ -60,10 +60,11 @@
 - Bearer auth: configurable CORS origins via `CORS_ORIGINS` env var
 - iOS app: Swift package (SPM, iOS 18+), actor-based APIClient with all endpoints (auth, events CRUD, members, parse), data models, SwiftLint config, test target
 - iOS auth: Login/Register SwiftUI screens, Keychain token persistence, @Observable AuthManager with session restore, ColorPicker for user color, auth-gated root view
+- iOS calendar: Month grid (42-cell Mon-start, colored event pills, +N more overflow), week grid (24h scrollable, overlap column-stacking), CalendarViewModel with async data loading, month/week toggle, prev/next nav, member filter sheet
 
 ## What's Next
 
-Task 17: iOS calendar views — month + week views in SwiftUI.
+Task 18: iOS event CRUD — create/edit/delete events with sheets.
 
 ## Reference Docs
 
