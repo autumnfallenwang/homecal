@@ -100,6 +100,11 @@ public final class CalendarViewModel: @unchecked Sendable {
         selectedEventId = id
     }
 
+    public func clearSelection() {
+        selectedEventId = nil
+        selectedNewEventDate = nil
+    }
+
     // MARK: - Data Loading
 
     public func loadData() async {

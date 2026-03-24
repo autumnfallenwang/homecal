@@ -2,12 +2,15 @@ import Foundation
 
 public struct EventLogEntry: Decodable, Identifiable, Sendable {
     public let id: String
-    public let eventId: String
-    public let userId: String
     public let action: String
-    public let changes: [String: JSONValue]?
+    public let changes: [String: FieldChange]?
     public let timestamp: Date
     public let user: EventLogUser
+}
+
+public struct FieldChange: Decodable, Sendable {
+    public let from: JSONValue
+    public let to: JSONValue
 }
 
 public struct EventLogUser: Decodable, Sendable {

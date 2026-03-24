@@ -1,8 +1,8 @@
 import SwiftUI
 
 private let hourHeight: CGFloat = 48
-private let defaultScrollHour = 7
 private let hourCount = 24
+private let scrollToHour = 7
 private let gutterWidth: CGFloat = 44
 private let dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -30,32 +30,25 @@ struct WeekGridView: View {
             Divider()
 
             // Scrollable time grid
-            ScrollViewReader { proxy in
-                ScrollView(.vertical) {
-                    ZStack(alignment: .topLeading) {
-                        // Hour grid lines + gutter
-                        hourGutter
+            ScrollView(.vertical) {
+                ZStack(alignment: .topLeading) {
+                    // Hour grid lines + gutter
+                    hourGutter
 
-                        // Day columns with events
-                        HStack(spacing: 0) {
-                            Color.clear.frame(width: gutterWidth)
+                    // Day columns with events
+                    HStack(spacing: 0) {
+                        Color.clear.frame(width: gutterWidth)
 
-                            ForEach(Array(viewModel.currentWeekDates.enumerated()), id: \.offset) { _, date in
-                                dayColumn(for: date)
-                            }
+                        ForEach(Array(viewModel.currentWeekDates.enumerated()), id: \.offset) { _, date in
+                            dayColumn(for: date)
                         }
                     }
-                    .frame(height: CGFloat(hourCount) * hourHeight)
-                    .id("weekGrid")
                 }
-                .onAppear {
-                    // Scroll to 7 AM
-                    proxy.scrollTo("weekGrid", anchor: UnitPoint(
-                        x: 0,
-                        y: CGFloat(defaultScrollHour) / CGFloat(hourCount)
-                    ))
-                }
+                .frame(height: CGFloat(hourCount) * hourHeight)
             }
+            .defaultScrollAnchor(
+                UnitPoint(x: 0, y: CGFloat(scrollToHour) / CGFloat(hourCount))
+            )
         }
     }
 

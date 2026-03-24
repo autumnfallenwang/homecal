@@ -44,7 +44,9 @@ public actor APIClient {
         body: (any Encodable)? = nil,
         extractToken: Bool = false
     ) async throws -> T {
-        let url = baseURL.appendingPathComponent(path)
+        guard let url = URL(string: path, relativeTo: baseURL) else {
+            throw APIError.invalidResponse
+        }
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = method
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -80,7 +82,9 @@ public actor APIClient {
         method: String,
         path: String
     ) async throws {
-        let url = baseURL.appendingPathComponent(path)
+        guard let url = URL(string: path, relativeTo: baseURL) else {
+            throw APIError.invalidResponse
+        }
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = method
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")

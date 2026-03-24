@@ -30,9 +30,10 @@
 | 15 | iOS project setup | ✅ Done | Swift package (SPM), APIClient actor with all endpoints, data models, health check UI, SwiftLint + test target |
 | 16 | iOS auth | ✅ Done | LoginView + RegisterView (with ColorPicker), KeychainService, AuthManager (@Observable), HomeView placeholder, 5 Swift tests |
 | 17 | iOS calendar views | ✅ Done | Month grid + week grid in SwiftUI, CalendarViewModel, event pills, member filter, overlap handling, 7 Swift tests |
-| 18 | iOS event CRUD | Not started | Create/edit/delete events with sheets |
-| 19 | iOS smart input — voice | Not started | iOS Speech framework → parse endpoint → pre-fill event |
-| 20 | iOS notifications | Not started | Local reminders for upcoming events |
+| 18 | iOS event CRUD | ✅ Done | EventFormView (create+edit+delete sheets), change log with field diffs, auto-scroll week to 7AM, URL fix for query params |
+| 19 | iOS smart input | Not started | NLP text/voice input → parse endpoint → pre-fill event form |
+| 20 | iOS day view | Not started | Tappable day detail view with event list |
+| 21 | iOS notifications | Not started | Local reminders for upcoming events |
 
 ## Phase 4: Future Enhancements (deferred)
 
@@ -41,7 +42,7 @@
 | — | Admin UI | Not started | User management page — low priority for small family use |
 | — | Web notifications | Not started | Reminders and alerts for upcoming events |
 | — | Cloud deploy | Not started | Docker Compose or Vercel + Fly.io |
-| — | Push notifications (APNs) | Not started | Requires backend device token storage |
+| — | Push notifications (APNs) | Not started | Requires backend device token storage + iOS registration |
 
 ## What's Working
 
@@ -60,11 +61,13 @@
 - Bearer auth: configurable CORS origins via `CORS_ORIGINS` env var
 - iOS app: Swift package (SPM, iOS 18+), actor-based APIClient with all endpoints (auth, events CRUD, members, parse), data models, SwiftLint config, test target
 - iOS auth: Login/Register SwiftUI screens, Keychain token persistence, @Observable AuthManager with session restore, ColorPicker for user color, auth-gated root view
-- iOS calendar: Month grid (42-cell Mon-start, colored event pills, +N more overflow), week grid (24h scrollable, overlap column-stacking), CalendarViewModel with async data loading, month/week toggle, prev/next nav, member filter sheet
+- iOS calendar: Month grid (42-cell Mon-start, colored event pills, +N more overflow), week grid (24h scrollable with auto-scroll to 7AM, overlap column-stacking), CalendarViewModel with async data loading, month/week toggle, prev/next nav, member filter sheet
+- iOS event CRUD: Unified EventFormView (create + edit + delete) as sheets, date pickers, private toggle, delete with confirmation alert, data reload on dismiss
+- iOS change log: Activity section in edit sheet with field-level diffs (title/date/visibility changes), user color dots, relative timestamps ("5m ago")
 
 ## What's Next
 
-Task 18: iOS event CRUD — create/edit/delete events with sheets.
+Task 19: iOS smart input — NLP text/voice input → parse endpoint → pre-fill event form.
 
 ## Reference Docs
 
