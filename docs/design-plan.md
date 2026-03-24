@@ -126,11 +126,12 @@ EventLog { id, eventId, userId, action, changes, timestamp }
 16. iOS auth — login/register screens, bearer token storage in Keychain
 17. iOS calendar views — month + week views in SwiftUI
 18. iOS event CRUD — create/edit/delete events with sheets, change log with field diffs
-19. iOS smart input — NLP text/voice input → parse endpoint → pre-fill event form
+19. iOS smart input — text field with NLP parse → pre-fill event form (testable on simulator)
 20. iOS day view — tappable day detail with event list (week header → day drill-down)
 21. iOS notifications — local reminders for upcoming events
 
 ### Phase 4 — Future Enhancements (deferred)
+- iOS voice input — Speech framework mic button → parse endpoint (requires physical device)
 - Admin UI (user management — Better Auth admin APIs already exist)
 - Web notifications/reminders
 - Cloud deployment (Docker Compose / Vercel + Fly.io)

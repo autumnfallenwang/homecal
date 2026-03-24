@@ -31,7 +31,7 @@
 | 16 | iOS auth | ✅ Done | LoginView + RegisterView (with ColorPicker), KeychainService, AuthManager (@Observable), HomeView placeholder, 5 Swift tests |
 | 17 | iOS calendar views | ✅ Done | Month grid + week grid in SwiftUI, CalendarViewModel, event pills, member filter, overlap handling, 7 Swift tests |
 | 18 | iOS event CRUD | ✅ Done | EventFormView (create+edit+delete sheets), change log with field diffs, auto-scroll week to 7AM, URL fix for query params |
-| 19 | iOS smart input | Not started | NLP text/voice input → parse endpoint → pre-fill event form |
+| 19 | iOS smart input (text) | Not started | Text field with NLP parse → pre-fill event form (testable on simulator) |
 | 20 | iOS day view | Not started | Tappable day detail view with event list |
 | 21 | iOS notifications | Not started | Local reminders for upcoming events |
 
@@ -42,6 +42,7 @@
 | — | Admin UI | Not started | User management page — low priority for small family use |
 | — | Web notifications | Not started | Reminders and alerts for upcoming events |
 | — | Cloud deploy | Not started | Docker Compose or Vercel + Fly.io |
+| — | iOS voice input | Not started | Speech framework mic button → parse endpoint (requires physical device) |
 | — | Push notifications (APNs) | Not started | Requires backend device token storage + iOS registration |
 
 ## What's Working
@@ -67,7 +68,7 @@
 
 ## What's Next
 
-Task 19: iOS smart input — NLP text/voice input → parse endpoint → pre-fill event form.
+Task 19: iOS smart input (text) — text field with NLP parse → pre-fill event form.
 
 ## Reference Docs
 
