@@ -20,10 +20,28 @@ A smart family calendar app running on a local home network. Each family member 
 ## Data Model
 
 ```
-User     { id, name, color, passwordHash, createdAt }
-Event    { id, title, start, end, ownerId, private, createdAt, updatedAt }
-EventLog { id, eventId, userId, action, changes, timestamp }
+User            { id, name, color, passwordHash, createdAt }
+Event           { id, title, start, end, ownerId, private, createdAt, updatedAt }
+EventAssignee   { id, eventId, userId }
+EventReminder   { id, eventId, minutesBefore, createdAt }
+EventLog        { id, eventId, userId, action, changes, timestamp }
+DeviceToken     { id, userId, platform, token, createdAt }
 ```
+
+### Assignees
+- Every event has **assignees** — the people this event is for
+- Creator (`ownerId`) is who made the event; assignees are who it's about
+- Default: creator is also the sole assignee (backward compatible)
+- Multi-select: "Family dinner" → assign all members; "Kid's dentist" → assign kid only
+- Calendar filter: member sidebar filters by assignee (not just owner)
+- Event pills show the color of the **first assignee** (or multi-dot for multiple)
+
+### Reminders
+- Each event can have **reminders** — time-based alerts before the event starts
+- Stored as `minutesBefore` (e.g., 15, 60, 1440 for 15min/1hr/1day)
+- Reminders notify **all assignees** on all their registered devices
+- Backend scheduler checks for due reminders and dispatches notifications
+- Notification channels: Web Push (browsers) + APNs (iOS devices)
 
 ## Core Rules
 
@@ -33,6 +51,7 @@ EventLog { id, eventId, userId, action, changes, timestamp }
 - Shared events can be **edited/deleted by anyone**
 - All changes to shared events are logged (EventLog) for transparency
 - Private events are only visible to and editable by the owner
+- Reminders fire for all assignees on all their devices
 
 ## Auth
 
@@ -119,7 +138,7 @@ EventLog { id, eventId, userId, action, changes, timestamp }
 11. Smart input — backend (LLM parse endpoint)
 12. Smart input — frontend (natural language → pre-fill dialog)
 
-### Phase 3 — LAN + iOS App (current)
+### Phase 3 — LAN + iOS App ✅
 13. LAN expose — bind Hono API to `0.0.0.0`, verify LAN access from other devices
 14. Better Auth bearer token plugin — enable token-based auth for mobile clients
 15. iOS project setup — Swift package, Xcode project, API client targeting LAN backend
@@ -127,12 +146,24 @@ EventLog { id, eventId, userId, action, changes, timestamp }
 17. iOS calendar views — month + week views in SwiftUI
 18. iOS event CRUD — create/edit/delete events with sheets, change log with field diffs
 19. iOS smart input — text field with NLP parse → pre-fill event form (testable on simulator)
-20. iOS day view — tappable day detail with event list (week header → day drill-down)
-21. iOS notifications — local reminders for upcoming events
+20. iOS day view — tappable day detail with event list (month day-tap → day drill-down)
 
-### Phase 4 — Future Enhancements (deferred)
+### Phase 4 — Event Assignees (current)
+Adds the concept of "who is this event for" — separate from "who created it."
+21. Assignees schema + migration — `event_assignees` join table, backfill existing events (owner = default assignee)
+22. Assignees API — update create/update/get endpoints to handle assignees array, update shared Zod schemas
+23. Assignees web UI — multi-select member picker in EventDialog, filter sidebar filters by assignee
+24. Assignees iOS UI — multi-select member picker in EventFormView, filter by assignee
+
+### Phase 5 — Reminders + Notifications
+Backend-driven reminders that notify assignees across all their devices.
+25. Reminders schema + API — `event_reminders` table (eventId, minutesBefore), `device_tokens` table (userId, platform, token), CRUD endpoints for reminders and device registration
+26. Reminder scheduler — backend cron/timer that checks for due reminders, dispatches to notification channels
+27. Web Push notifications — Service Worker + Web Push API, device token registration, browser notification display
+28. iOS push notifications — APNs integration, device token registration, notification handling (requires physical device + Apple Developer account)
+
+### Phase 6 — Future Enhancements (deferred)
 - iOS voice input — Speech framework mic button → parse endpoint (requires physical device)
 - Admin UI (user management — Better Auth admin APIs already exist)
-- Web notifications/reminders
 - Cloud deployment (Docker Compose / Vercel + Fly.io)
-- Push notifications via APNs (requires backend addition for device tokens)
+- Recurring events — repeat rules (daily/weekly/monthly)

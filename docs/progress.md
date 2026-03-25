@@ -21,7 +21,7 @@
 | 11 | Smart input — backend | ✅ Done | `POST /api/events/parse` — text → LLM (llm-gateway) → `{ title, start, end }`, shared schemas, unit + integration tests |
 | 12 | Smart input — frontend | ✅ Done | CalendarHeader smart input field, EventDialog parsedEvent pre-fill, Haiku default + Gemma fallback |
 
-## Phase 3: LAN + iOS App
+## Phase 3: LAN + iOS App ✅
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
@@ -31,19 +31,35 @@
 | 16 | iOS auth | ✅ Done | LoginView + RegisterView (with ColorPicker), KeychainService, AuthManager (@Observable), HomeView placeholder, 5 Swift tests |
 | 17 | iOS calendar views | ✅ Done | Month grid + week grid in SwiftUI, CalendarViewModel, event pills, member filter, overlap handling, 7 Swift tests |
 | 18 | iOS event CRUD | ✅ Done | EventFormView (create+edit+delete sheets), change log with field diffs, auto-scroll week to 7AM, URL fix for query params |
-| 19 | iOS smart input (text) | Not started | Text field with NLP parse → pre-fill event form (testable on simulator) |
-| 20 | iOS day view | Not started | Tappable day detail view with event list |
-| 21 | iOS notifications | Not started | Local reminders for upcoming events |
+| 19 | iOS smart input (text) | ✅ Done | Smart input text field with sparkles button, calls parse API, pre-fills EventFormView with local-time-aware ISO parsing |
+| 20 | iOS day view | ✅ Done | DayGridView with 24h scrollable grid, month day-tap navigates to day view, day mode in segmented picker, reuses WeekEventBlockView |
 
-## Phase 4: Future Enhancements (deferred)
+## Phase 4: Event Assignees
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 21 | Assignees schema + migration | Not started | `event_assignees` join table, backfill existing events (owner = default assignee) |
+| 22 | Assignees API | Not started | Update create/update/get endpoints for assignees array, shared Zod schemas |
+| 23 | Assignees web UI | Not started | Multi-select member picker in EventDialog, filter sidebar filters by assignee |
+| 24 | Assignees iOS UI | Not started | Multi-select member picker in EventFormView, filter by assignee |
+
+## Phase 5: Reminders + Notifications
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 25 | Reminders schema + API | Not started | `event_reminders` + `device_tokens` tables, CRUD endpoints, device registration |
+| 26 | Reminder scheduler | Not started | Backend cron/timer, checks due reminders, dispatches notifications |
+| 27 | Web Push notifications | Not started | Service Worker + Web Push API, device token registration, browser notifications |
+| 28 | iOS push notifications | Not started | APNs integration, device token registration (requires physical device + Apple Dev account) |
+
+## Phase 6: Future Enhancements (deferred)
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
 | — | Admin UI | Not started | User management page — low priority for small family use |
-| — | Web notifications | Not started | Reminders and alerts for upcoming events |
-| — | Cloud deploy | Not started | Docker Compose or Vercel + Fly.io |
 | — | iOS voice input | Not started | Speech framework mic button → parse endpoint (requires physical device) |
-| — | Push notifications (APNs) | Not started | Requires backend device token storage + iOS registration |
+| — | Cloud deploy | Not started | Docker Compose or Vercel + Fly.io |
+| — | Recurring events | Not started | Repeat rules (daily/weekly/monthly) |
 
 ## What's Working
 
@@ -62,13 +78,14 @@
 - Bearer auth: configurable CORS origins via `CORS_ORIGINS` env var
 - iOS app: Swift package (SPM, iOS 18+), actor-based APIClient with all endpoints (auth, events CRUD, members, parse), data models, SwiftLint config, test target
 - iOS auth: Login/Register SwiftUI screens, Keychain token persistence, @Observable AuthManager with session restore, ColorPicker for user color, auth-gated root view
-- iOS calendar: Month grid (42-cell Mon-start, colored event pills, +N more overflow), week grid (24h scrollable with auto-scroll to 7AM, overlap column-stacking), CalendarViewModel with async data loading, month/week toggle, prev/next nav, member filter sheet
+- iOS calendar: Month grid (42-cell Mon-start, colored event pills, +N more overflow), week grid (24h scrollable with auto-scroll to 7AM, overlap column-stacking), day grid (24h single-day view, tap from month to drill down), CalendarViewModel with async data loading, month/week/day toggle, prev/next nav, member filter sheet
 - iOS event CRUD: Unified EventFormView (create + edit + delete) as sheets, date pickers, private toggle, delete with confirmation alert, data reload on dismiss
 - iOS change log: Activity section in edit sheet with field-level diffs (title/date/visibility changes), user color dots, relative timestamps ("5m ago")
+- iOS smart input: Text field with sparkles button in calendar header, calls `POST /api/events/parse`, pre-fills event form with parsed title/start/end (local-time-aware ISO parsing)
 
 ## What's Next
 
-Task 19: iOS smart input (text) — text field with NLP parse → pre-fill event form.
+Task 21: Assignees schema + migration — `event_assignees` join table (backend work on Arch).
 
 ## Reference Docs
 
