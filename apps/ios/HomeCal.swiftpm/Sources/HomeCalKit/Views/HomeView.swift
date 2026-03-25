@@ -5,6 +5,7 @@ public struct HomeView: View {
     @State private var viewModel = CalendarViewModel()
     @State private var showMemberFilter = false
     @State private var isSigningOut = false
+    @State private var smartInputText = ""
 
     public init() {}
 
@@ -31,12 +32,48 @@ public struct HomeView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 130)
+                    .frame(width: 190)
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 6)
 
                 Divider()
+
+                // Smart input bar
+                HStack(spacing: 8) {
+                    TextField(
+                        "e.g. Dentist next Tuesday 2pm",
+                        text: $smartInputText
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .submitLabel(.go)
+                    .onSubmit { submitSmartInput() }
+                    .disabled(viewModel.isParsingSmartInput)
+
+                    Button {
+                        submitSmartInput()
+                    } label: {
+                        if viewModel.isParsingSmartInput {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "sparkles")
+                        }
+                    }
+                    .disabled(
+                        smartInputText.trimmingCharacters(in: .whitespaces).isEmpty
+                            || viewModel.isParsingSmartInput
+                    )
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+
+                if let error = viewModel.smartInputError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal)
+                }
 
                 if viewModel.isLoading && viewModel.events.isEmpty {
                     Spacer()
@@ -48,6 +85,8 @@ public struct HomeView: View {
                         MonthGridView(viewModel: viewModel)
                     case .week:
                         WeekGridView(viewModel: viewModel)
+                    case .day:
+                        DayGridView(viewModel: viewModel)
                     }
                 }
             }
@@ -89,7 +128,8 @@ public struct HomeView: View {
                         apiClient: authManager.apiClient,
                         onSave: {},
                         eventId: nil,
-                        initialDate: viewModel.selectedNewEventDate
+                        initialDate: viewModel.selectedNewEventDate,
+                        parsedEvent: viewModel.parsedEvent
                     )
                 }
             )
@@ -104,7 +144,8 @@ public struct HomeView: View {
                         apiClient: authManager.apiClient,
                         onSave: {},
                         eventId: viewModel.selectedEventId,
-                        initialDate: nil
+                        initialDate: nil,
+                        parsedEvent: nil
                     )
                 }
             )
@@ -118,6 +159,15 @@ public struct HomeView: View {
             .onChange(of: viewModel.viewMode) {
                 Task { await viewModel.loadData() }
             }
+        }
+    }
+
+    private func submitSmartInput() {
+        let trimmed = smartInputText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        Task {
+            await viewModel.parseSmartInput(trimmed)
+            smartInputText = ""
         }
     }
 

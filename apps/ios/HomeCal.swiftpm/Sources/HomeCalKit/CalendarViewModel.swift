@@ -4,6 +4,7 @@ import SwiftUI
 public enum CalendarViewMode: String, CaseIterable {
     case month = "Month"
     case week = "Week"
+    case day = "Day"
 }
 
 @Observable
@@ -18,6 +19,11 @@ public final class CalendarViewModel: @unchecked Sendable {
     // Task 18 hooks
     public var selectedEventId: String?
     public var selectedNewEventDate: Date?
+
+    // Task 19: Smart input
+    public var parsedEvent: ParsedEvent?
+    public var isParsingSmartInput = false
+    public var smartInputError: String?
 
     private var apiClient: APIClient?
 
@@ -51,6 +57,8 @@ public final class CalendarViewModel: @unchecked Sendable {
             return formatMonthYear(currentDate)
         case .week:
             return formatWeekRange(currentWeekDates)
+        case .day:
+            return formatDayTitle(currentDate)
         }
     }
 
@@ -71,6 +79,8 @@ public final class CalendarViewModel: @unchecked Sendable {
             currentDate = calendar.date(byAdding: .month, value: 1, to: currentDate) ?? currentDate
         case .week:
             currentDate = calendar.date(byAdding: .weekOfYear, value: 1, to: currentDate) ?? currentDate
+        case .day:
+            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate) ?? currentDate
         }
     }
 
@@ -81,7 +91,14 @@ public final class CalendarViewModel: @unchecked Sendable {
             currentDate = calendar.date(byAdding: .month, value: -1, to: currentDate) ?? currentDate
         case .week:
             currentDate = calendar.date(byAdding: .weekOfYear, value: -1, to: currentDate) ?? currentDate
+        case .day:
+            currentDate = calendar.date(byAdding: .day, value: -1, to: currentDate) ?? currentDate
         }
+    }
+
+    public func showDay(_ date: Date) {
+        currentDate = date
+        viewMode = .day
     }
 
     public func toggleMember(id: String) {
@@ -103,6 +120,22 @@ public final class CalendarViewModel: @unchecked Sendable {
     public func clearSelection() {
         selectedEventId = nil
         selectedNewEventDate = nil
+        parsedEvent = nil
+    }
+
+    public func parseSmartInput(_ text: String) async {
+        guard let apiClient else { return }
+        isParsingSmartInput = true
+        smartInputError = nil
+        defer { isParsingSmartInput = false }
+
+        do {
+            let result = try await apiClient.parseEvent(ParseEventInput(text: text))
+            parsedEvent = result
+            selectedNewEventDate = Date()
+        } catch {
+            smartInputError = error.localizedDescription
+        }
     }
 
     // MARK: - Data Loading
@@ -112,17 +145,29 @@ public final class CalendarViewModel: @unchecked Sendable {
         isLoading = true
         defer { isLoading = false }
 
-        let gridDates: [Date]
+        let calendar = Calendar.current
+        let gridStart: Date
+        let gridEnd: Date
+
         switch viewMode {
         case .month:
-            gridDates = currentMonthGridDates
+            let dates = currentMonthGridDates
+            guard let first = dates.first, let last = dates.last,
+                  let end = calendar.date(byAdding: .day, value: 1, to: last) else { return }
+            gridStart = first
+            gridEnd = end
         case .week:
-            gridDates = currentWeekDates
+            let dates = currentWeekDates
+            guard let first = dates.first, let last = dates.last,
+                  let end = calendar.date(byAdding: .day, value: 1, to: last) else { return }
+            gridStart = first
+            gridEnd = end
+        case .day:
+            let dayStart = calendar.startOfDay(for: currentDate)
+            guard let end = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return }
+            gridStart = dayStart
+            gridEnd = end
         }
-
-        guard let gridStart = gridDates.first, let gridLast = gridDates.last else { return }
-        let calendar = Calendar.current
-        guard let gridEnd = calendar.date(byAdding: .day, value: 1, to: gridLast) else { return }
 
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]

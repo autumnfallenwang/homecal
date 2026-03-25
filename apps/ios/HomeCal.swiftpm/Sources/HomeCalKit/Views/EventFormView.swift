@@ -8,6 +8,7 @@ struct EventFormView: View {
     // Mode: edit if eventId is set, create if initialDate is set
     let eventId: String?
     let initialDate: Date?
+    let parsedEvent: ParsedEvent?
 
     @State private var title = ""
     @State private var startDate = Date()
@@ -135,6 +136,14 @@ struct EventFormView: View {
             .task {
                 if let eventId {
                     await loadEvent(id: eventId)
+                } else if let parsedEvent {
+                    title = parsedEvent.title
+                    if let start = parsedEvent.localStartDate() {
+                        startDate = start
+                    }
+                    if let end = parsedEvent.localEndDate() {
+                        endDate = end
+                    }
                 } else if let initialDate {
                     startDate = initialDate
                     let calendar = Calendar.current

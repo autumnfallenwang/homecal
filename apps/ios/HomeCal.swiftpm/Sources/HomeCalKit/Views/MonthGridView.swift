@@ -48,7 +48,7 @@ struct MonthGridView: View {
                             year: viewModel.currentYear,
                             month: viewModel.currentMonth
                         ),
-                        onTapDay: { viewModel.tapDay(date) },
+                        onTapDay: { viewModel.showDay(date) },
                         onTapEvent: { viewModel.tapEvent(id: $0) }
                     )
                 }

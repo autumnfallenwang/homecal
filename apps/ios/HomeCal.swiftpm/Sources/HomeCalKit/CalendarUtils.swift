@@ -70,6 +70,12 @@ public func formatWeekRange(_ dates: [Date]) -> String {
     return "\(monthShort.string(from: first)) \(firstDay) – \(monthShort.string(from: last)) \(lastDay), \(year)"
 }
 
+public func formatDayTitle(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "EEE, MMM d"
+    return formatter.string(from: date)
+}
+
 public func formatHour(_ hour: Int) -> String {
     if hour == 0 { return "12 AM" }
     if hour < 12 { return "\(hour) AM" }
