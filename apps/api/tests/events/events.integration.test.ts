@@ -22,6 +22,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  await db.delete(schema.eventAssignees);
   await db.delete(schema.eventLogs);
   await db.delete(schema.events);
   await db.delete(schema.sessions);
@@ -649,5 +650,129 @@ describe("DELETE /api/events/:id", () => {
     });
 
     expect(res.status).toBe(401);
+  });
+});
+
+// --- ASSIGNEES ---
+
+describe("Event Assignees", () => {
+  it("auto-assigns owner when no assigneeIds provided", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    const { body } = await createEvent(alice, sharedEvent);
+
+    expect(body.assignees).toHaveLength(1);
+    expect(body.assignees[0].name).toBe("Alice");
+  });
+
+  it("assigns specified users when assigneeIds provided", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    await createUser("Bob", "bob@test.com", "#0000ff");
+
+    // Get Bob's user ID
+    const usersRes = await req("/api/users", { headers: { Cookie: alice } });
+    const usersList = await usersRes.json();
+    const bobId = usersList.find((u: { name: string }) => u.name === "Bob").id;
+
+    const res = await req("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: alice },
+      body: JSON.stringify({ ...sharedEvent, title: "With Bob", assigneeIds: [bobId] }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(body.assignees).toHaveLength(1);
+    expect(body.assignees[0].name).toBe("Bob");
+  });
+
+  it("GET / returns assignees array per event", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    await createEvent(alice, sharedEvent);
+
+    const res = await req("/api/events", { headers: { Cookie: alice } });
+    const body = await res.json();
+
+    expect(body[0].assignees).toBeDefined();
+    expect(body[0].assignees).toHaveLength(1);
+    expect(body[0].assignees[0].name).toBe("Alice");
+    expect(body[0].assignees[0].color).toBeDefined();
+  });
+
+  it("GET /:id returns assignees with user info", async () => {
+    const alice = await createUser("Alice", "alice@test.com", "#ff0000");
+    const { body: event } = await createEvent(alice, sharedEvent);
+
+    const res = await req(`/api/events/${event.id}`, { headers: { Cookie: alice } });
+    const body = await res.json();
+
+    expect(body.assignees).toHaveLength(1);
+    expect(body.assignees[0]).toEqual({
+      id: expect.any(String),
+      name: "Alice",
+      color: "#ff0000",
+    });
+  });
+
+  it("PATCH with assigneeIds replaces assignees", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    await createUser("Bob", "bob@test.com", "#0000ff");
+    const { body: event } = await createEvent(alice, sharedEvent);
+
+    // Get Bob's ID
+    const usersRes = await req("/api/users", { headers: { Cookie: alice } });
+    const usersList = await usersRes.json();
+    const bobId = usersList.find((u: { name: string }) => u.name === "Bob").id;
+
+    const res = await req(`/api/events/${event.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: alice },
+      body: JSON.stringify({ assigneeIds: [bobId] }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.assignees).toHaveLength(1);
+    expect(body.assignees[0].name).toBe("Bob");
+  });
+
+  it("PATCH without assigneeIds leaves assignees unchanged", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    const { body: event } = await createEvent(alice, sharedEvent);
+
+    const res = await req(`/api/events/${event.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: alice },
+      body: JSON.stringify({ title: "Updated Title" }),
+    });
+    const body = await res.json();
+
+    expect(body.assignees).toHaveLength(1);
+    expect(body.assignees[0].name).toBe("Alice");
+  });
+
+  it("logs assignee changes in event change log", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    await createUser("Bob", "bob@test.com", "#0000ff");
+    const { body: event } = await createEvent(alice, sharedEvent);
+
+    const usersRes = await req("/api/users", { headers: { Cookie: alice } });
+    const usersList = await usersRes.json();
+    const bobId = usersList.find((u: { name: string }) => u.name === "Bob").id;
+
+    await req(`/api/events/${event.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: alice },
+      body: JSON.stringify({ assigneeIds: [bobId] }),
+    });
+
+    const logsRes = await req(`/api/events/${event.id}/logs`, {
+      headers: { Cookie: alice },
+    });
+    const logs = await logsRes.json();
+
+    const updateLog = logs.find((l: { action: string }) => l.action === "updated");
+    expect(updateLog).toBeDefined();
+    expect(updateLog.changes.assigneeIds).toBeDefined();
+    expect(updateLog.changes.assigneeIds.to).toContain(bobId);
   });
 });

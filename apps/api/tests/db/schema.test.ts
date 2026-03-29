@@ -2,6 +2,7 @@ import { getTableColumns, getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import {
   accounts,
+  eventAssignees,
   eventLogs,
   events,
   sessions,
@@ -18,6 +19,7 @@ describe("schema", () => {
       expect(getTableName(sessions)).toBe("sessions");
       expect(getTableName(accounts)).toBe("accounts");
       expect(getTableName(verifications)).toBe("verifications");
+      expect(getTableName(eventAssignees)).toBe("event_assignees");
     });
   });
 
@@ -154,6 +156,19 @@ describe("schema", () => {
 
     it("defaults private to false", () => {
       expect(columns.private.hasDefault).toBe(true);
+    });
+  });
+
+  describe("eventAssignees table", () => {
+    const columns = getTableColumns(eventAssignees);
+
+    it("has all required columns", () => {
+      expect(Object.keys(columns)).toEqual(expect.arrayContaining(["id", "eventId", "userId"]));
+    });
+
+    it("has uuid primary key with default", () => {
+      expect(columns.id.dataType).toBe("string");
+      expect(columns.id.hasDefault).toBe(true);
     });
   });
 

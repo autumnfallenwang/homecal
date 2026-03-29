@@ -1,7 +1,6 @@
 "use client";
 
 import type { CalendarEvent } from "@/hooks/use-events";
-import type { Member } from "@/hooks/use-members";
 import { cn } from "@/lib/utils";
 import { EventPill } from "./event-pill";
 
@@ -10,7 +9,6 @@ const MAX_VISIBLE_PILLS = 3;
 interface DayCellProps {
   date: Date;
   events: CalendarEvent[];
-  members: Member[];
   isCurrentMonth: boolean;
   isToday: boolean;
   onEventClick?: (eventId: string) => void;
@@ -20,13 +18,11 @@ interface DayCellProps {
 export function DayCell({
   date,
   events,
-  members,
   isCurrentMonth,
   isToday: today,
   onEventClick,
   onDayClick,
 }: DayCellProps) {
-  const memberMap = new Map(members.map((m) => [m.id, m]));
   const visibleEvents = events.slice(0, MAX_VISIBLE_PILLS);
   const overflowCount = events.length - MAX_VISIBLE_PILLS;
 
@@ -51,12 +47,12 @@ export function DayCell({
       </span>
       <div className="flex flex-col gap-0.5">
         {visibleEvents.map((event) => {
-          const member = memberMap.get(event.ownerId);
+          const color = event.assignees[0]?.color ?? "#6b7280";
           return (
             <EventPill
               key={event.id}
               title={event.title}
-              color={member?.color ?? "#6b7280"}
+              color={color}
               onClick={(e) => {
                 e.stopPropagation();
                 onEventClick?.(event.id);

@@ -9,11 +9,11 @@ import { authClient } from "@/lib/auth-client";
 
 interface CalendarHeaderProps {
   title: string;
-  view: "month" | "week";
+  view: "month" | "week" | "day";
   userName: string;
   onPrev: () => void;
   onNext: () => void;
-  onViewChange: (view: "month" | "week") => void;
+  onViewChange: (view: "month" | "week" | "day") => void;
   onNewEvent?: () => void;
   onSmartInput?: (text: string) => void;
   smartInputLoading?: boolean;
@@ -70,10 +70,18 @@ export function CalendarHeader({
           <Button
             variant={view === "week" ? "secondary" : "ghost"}
             size="sm"
-            className="rounded-l-none"
+            className="rounded-none border-x"
             onClick={() => onViewChange("week")}
           >
             Week
+          </Button>
+          <Button
+            variant={view === "day" ? "secondary" : "ghost"}
+            size="sm"
+            className="rounded-l-none"
+            onClick={() => onViewChange("day")}
+          >
+            Day
           </Button>
         </div>
 

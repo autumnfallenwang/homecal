@@ -54,26 +54,38 @@ describe("parsedEventSchema", () => {
 
 describe("buildParsePrompt", () => {
   it("includes the date", () => {
-    const prompt = buildParsePrompt("2026-03-09");
+    const prompt = buildParsePrompt("2026-03-09", []);
     expect(prompt).toContain("2026-03-09");
   });
 
   it("includes day of week", () => {
-    const prompt = buildParsePrompt("2026-03-09");
+    const prompt = buildParsePrompt("2026-03-09", []);
     expect(prompt).toContain("Sunday");
   });
 
   it("includes JSON instruction", () => {
-    const prompt = buildParsePrompt("2026-03-09");
+    const prompt = buildParsePrompt("2026-03-09", []);
     expect(prompt).toContain("JSON");
     expect(prompt).toContain("title");
     expect(prompt).toContain("start");
     expect(prompt).toContain("end");
+    expect(prompt).toContain("assignees");
   });
 
   it("instructs UTC format with Z suffix", () => {
-    const prompt = buildParsePrompt("2026-03-09");
+    const prompt = buildParsePrompt("2026-03-09", []);
     expect(prompt).toContain("00Z");
+  });
+
+  it("includes family member names when provided", () => {
+    const prompt = buildParsePrompt("2026-03-09", ["Dad", "Mom", "Kid"]);
+    expect(prompt).toContain("Dad, Mom, Kid");
+    expect(prompt).toContain("Family members");
+  });
+
+  it("omits family members line when empty", () => {
+    const prompt = buildParsePrompt("2026-03-09", []);
+    expect(prompt).not.toContain("Family members");
   });
 });
 
@@ -89,6 +101,7 @@ describe("parseLlmResponse", () => {
     expect(result.title).toBe("Dentist");
     expect(result.start).toBe("2026-03-10T14:00:00Z");
     expect(result.end).toBe("2026-03-10T15:00:00Z");
+    expect(result.assigneeIds).toEqual([]);
   });
 
   it("handles markdown code fences", () => {
@@ -130,6 +143,60 @@ describe("parseLlmResponse", () => {
     ).toThrow("Invalid event data");
   });
 
+  it("normalizes datetimes without Z suffix", () => {
+    const noZ = JSON.stringify({
+      title: "Dinner",
+      start: "2026-03-29T19:00:00",
+      end: "2026-03-29T20:00:00",
+    });
+    const result = parseLlmResponse(noZ);
+    expect(result.start).toBe("2026-03-29T19:00:00Z");
+    expect(result.end).toBe("2026-03-29T20:00:00Z");
+  });
+
+  it("normalizes datetimes without seconds", () => {
+    const noSec = JSON.stringify({
+      title: "Lunch",
+      start: "2026-03-29T12:00",
+      end: "2026-03-29T13:00",
+    });
+    const result = parseLlmResponse(noSec);
+    expect(result.start).toBe("2026-03-29T12:00:00Z");
+    expect(result.end).toBe("2026-03-29T13:00:00Z");
+  });
+
+  it("converts timezone offset to UTC", () => {
+    const offset = JSON.stringify({
+      title: "Call",
+      start: "2026-03-29T14:00:00+00:00",
+      end: "2026-03-29T15:00:00+00:00",
+    });
+    const result = parseLlmResponse(offset);
+    expect(result.start).toBe("2026-03-29T14:00:00.000Z");
+    expect(result.end).toBe("2026-03-29T15:00:00.000Z");
+  });
+
+  it("fixes end before start by defaulting to start + 1 hour", () => {
+    const flipped = JSON.stringify({
+      title: "Meeting",
+      start: "2026-03-29T15:00:00Z",
+      end: "2026-03-29T14:00:00Z",
+    });
+    const result = parseLlmResponse(flipped);
+    expect(result.start).toBe("2026-03-29T15:00:00Z");
+    expect(result.end).toBe("2026-03-29T16:00:00.000Z");
+  });
+
+  it("fixes end equal to start by defaulting to start + 1 hour", () => {
+    const same = JSON.stringify({
+      title: "Quick sync",
+      start: "2026-03-29T10:00:00Z",
+      end: "2026-03-29T10:00:00Z",
+    });
+    const result = parseLlmResponse(same);
+    expect(result.end).toBe("2026-03-29T11:00:00.000Z");
+  });
+
   it("strips extra fields", () => {
     const withExtra = JSON.stringify({
       title: "Dentist",
@@ -142,7 +209,50 @@ describe("parseLlmResponse", () => {
       title: "Dentist",
       start: "2026-03-10T14:00:00Z",
       end: "2026-03-10T15:00:00Z",
+      assigneeIds: [],
     });
     expect("location" in result).toBe(false);
+  });
+
+  it("maps assignee names to IDs", () => {
+    const json = JSON.stringify({
+      title: "Kid's dentist",
+      start: "2026-03-10T14:00:00Z",
+      end: "2026-03-10T15:00:00Z",
+      assignees: ["Kid"],
+    });
+    const nameToId = new Map([
+      ["Dad", "id-dad"],
+      ["Kid", "id-kid"],
+    ]);
+    const result = parseLlmResponse(json, nameToId);
+    expect(result.assigneeIds).toEqual(["id-kid"]);
+  });
+
+  it("maps assignee names case-insensitively", () => {
+    const json = JSON.stringify({
+      title: "Dinner",
+      start: "2026-03-10T18:00:00Z",
+      end: "2026-03-10T20:00:00Z",
+      assignees: ["dad", "MOM"],
+    });
+    const nameToId = new Map([
+      ["Dad", "id-dad"],
+      ["Mom", "id-mom"],
+    ]);
+    const result = parseLlmResponse(json, nameToId);
+    expect(result.assigneeIds).toEqual(["id-dad", "id-mom"]);
+  });
+
+  it("ignores unrecognized assignee names", () => {
+    const json = JSON.stringify({
+      title: "Meeting",
+      start: "2026-03-10T10:00:00Z",
+      end: "2026-03-10T11:00:00Z",
+      assignees: ["Unknown Person"],
+    });
+    const nameToId = new Map([["Dad", "id-dad"]]);
+    const result = parseLlmResponse(json, nameToId);
+    expect(result.assigneeIds).toEqual([]);
   });
 });

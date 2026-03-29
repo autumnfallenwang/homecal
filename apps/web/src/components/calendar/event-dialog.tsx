@@ -3,6 +3,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { ChangeLog } from "@/components/calendar/change-log";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -16,17 +17,20 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useEventLogs } from "@/hooks/use-event-logs";
 import type { CalendarEvent } from "@/hooks/use-events";
+import type { Member } from "@/hooks/use-members";
 
 export interface ParsedEvent {
   title: string;
   start: string;
   end: string;
+  assigneeIds?: string[];
 }
 
 interface EventDialogProps {
   date: Date | null;
   event: CalendarEvent | null;
   parsedEvent?: ParsedEvent | null;
+  members: Member[];
   onClose: () => void;
   onSaved: () => void;
 }
@@ -44,11 +48,19 @@ function isoToLocalDatetime(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function EventDialog({ date, event, parsedEvent, onClose, onSaved }: EventDialogProps) {
+export function EventDialog({
+  date,
+  event,
+  parsedEvent,
+  members,
+  onClose,
+  onSaved,
+}: EventDialogProps) {
   const [title, setTitle] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -72,6 +84,7 @@ export function EventDialog({ date, event, parsedEvent, onClose, onSaved }: Even
     setStart("");
     setEnd("");
     setIsPrivate(false);
+    setAssigneeIds([]);
     setError(null);
     setSaving(false);
     setConfirmingDelete(false);
@@ -84,6 +97,9 @@ export function EventDialog({ date, event, parsedEvent, onClose, onSaved }: Even
       setTitle(parsedEvent.title);
       setStart(parsedEvent.start.slice(0, 16));
       setEnd(parsedEvent.end.slice(0, 16));
+      if (parsedEvent.assigneeIds?.length) {
+        setAssigneeIds(parsedEvent.assigneeIds);
+      }
     }
   }, [parsedEvent, date, event]);
 
@@ -104,6 +120,7 @@ export function EventDialog({ date, event, parsedEvent, onClose, onSaved }: Even
       setStart(isoToLocalDatetime(event.start));
       setEnd(isoToLocalDatetime(event.end));
       setIsPrivate(event.private);
+      setAssigneeIds(event.assignees.map((a) => a.id));
     }
   }, [event]);
 
@@ -118,6 +135,7 @@ export function EventDialog({ date, event, parsedEvent, onClose, onSaved }: Even
         start: new Date(start).toISOString(),
         end: new Date(end).toISOString(),
         private: isPrivate,
+        ...(assigneeIds.length > 0 ? { assigneeIds } : {}),
       };
 
       const url = isEdit ? `/api/events/${event.id}` : "/api/events";
@@ -222,6 +240,34 @@ export function EventDialog({ date, event, parsedEvent, onClose, onSaved }: Even
             <Switch id="event-private" checked={isPrivate} onCheckedChange={setIsPrivate} />
             <Label htmlFor="event-private">Private event</Label>
           </div>
+
+          {!isPrivate && members.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <Label>Assignees</Label>
+              <div className="flex flex-col gap-1.5">
+                {members.map((member) => (
+                  <div key={member.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`assignee-${member.id}`}
+                      checked={assigneeIds.includes(member.id)}
+                      onCheckedChange={(checked) => {
+                        setAssigneeIds((prev) =>
+                          checked ? [...prev, member.id] : prev.filter((id) => id !== member.id),
+                        );
+                      }}
+                    />
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: member.color }}
+                    />
+                    <label htmlFor={`assignee-${member.id}`} className="cursor-pointer text-sm">
+                      {member.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

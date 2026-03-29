@@ -8,7 +8,7 @@ import { and, desc, eq, gte, lte, or } from "drizzle-orm";
 import { Hono } from "hono";
 import type { auth } from "../auth.js";
 import { db } from "../db/index.js";
-import { eventLogs, events, users } from "../db/schema.js";
+import { eventAssignees, eventLogs, events, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 import { buildParsePrompt, callLlm, parseLlmResponse } from "../services/llm.js";
 
@@ -20,6 +20,13 @@ export const eventsApp = new Hono<{
 }>();
 
 eventsApp.use(requireAuth);
+
+// Shape raw assignee join results into [{ id, name, color }]
+function formatAssignees(
+  assignees: { user: { id: string; name: string; color: string } }[],
+): { id: string; name: string; color: string }[] {
+  return assignees.map((a) => ({ id: a.user.id, name: a.user.name, color: a.user.color }));
+}
 
 // POST /parse — Parse natural language into event fields
 eventsApp.post("/parse", async (c) => {
@@ -34,15 +41,23 @@ eventsApp.post("/parse", async (c) => {
   const fallbackModel = process.env.LLM_FALLBACK_MODEL || "gemma3:27b";
   const today = new Date().toISOString().split("T")[0];
 
+  // Fetch members for assignee resolution
+  const memberRows = await db
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .orderBy(users.name);
+  const memberNames = memberRows.map((m) => m.name);
+  const memberNameToId = new Map(memberRows.map((m) => [m.name, m.id]));
+
   try {
-    const systemPrompt = buildParsePrompt(today);
+    const systemPrompt = buildParsePrompt(today, memberNames);
     let raw: string;
     try {
       raw = await callLlm({ gatewayUrl, model }, systemPrompt, parsed.data.text);
     } catch {
       raw = await callLlm({ gatewayUrl, model: fallbackModel }, systemPrompt, parsed.data.text);
     }
-    const result = parseLlmResponse(raw);
+    const result = parseLlmResponse(raw, memberNameToId);
     return c.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "LLM parsing failed";
@@ -72,6 +87,19 @@ eventsApp.post("/", async (c) => {
     })
     .returning();
 
+  // Insert assignees: use provided list, or default to owner
+  const assigneeUserIds =
+    data.assigneeIds && data.assigneeIds.length > 0 ? data.assigneeIds : [userId];
+  await db
+    .insert(eventAssignees)
+    .values(assigneeUserIds.map((uid) => ({ eventId: event.id, userId: uid })));
+
+  // Fetch assignees with user info
+  const assigneeRows = await db.query.eventAssignees.findMany({
+    where: eq(eventAssignees.eventId, event.id),
+    with: { user: true },
+  });
+
   // Log creation for shared events only
   if (!event.private) {
     await db.insert(eventLogs).values({
@@ -82,7 +110,7 @@ eventsApp.post("/", async (c) => {
     });
   }
 
-  return c.json(event, 201);
+  return c.json({ ...event, assignees: formatAssignees(assigneeRows) }, 201);
 });
 
 // GET / — List events
@@ -108,13 +136,18 @@ eventsApp.get("/", async (c) => {
     conditions.push(lte(events.start, new Date(to)));
   }
 
-  const result = await db
-    .select()
-    .from(events)
-    .where(and(...conditions))
-    .orderBy(events.start);
+  const result = await db.query.events.findMany({
+    where: and(...conditions),
+    orderBy: events.start,
+    with: { assignees: { with: { user: true } } },
+  });
 
-  return c.json(result);
+  const shaped = result.map((e) => {
+    const { assignees: rawAssignees, ...rest } = e;
+    return { ...rest, assignees: formatAssignees(rawAssignees) };
+  });
+
+  return c.json(shaped);
 });
 
 // GET /:id — Get single event
@@ -124,7 +157,7 @@ eventsApp.get("/:id", async (c) => {
 
   const result = await db.query.events.findFirst({
     where: eq(events.id, id),
-    with: { owner: true },
+    with: { owner: true, assignees: { with: { user: true } } },
   });
 
   if (!result) {
@@ -136,7 +169,8 @@ eventsApp.get("/:id", async (c) => {
     return c.json({ error: "Not found" }, 404);
   }
 
-  return c.json(result);
+  const { assignees: rawAssignees, ...rest } = result;
+  return c.json({ ...rest, assignees: formatAssignees(rawAssignees) });
 });
 
 // GET /:id/logs — Get event change logs
@@ -230,14 +264,45 @@ eventsApp.patch("/:id", async (c) => {
     changes.private = { from: existing.private, to: data.private };
   }
 
-  // No actual changes — return existing event unchanged
-  if (Object.keys(updateValues).length === 0) {
-    return c.json(existing);
+  // Handle assignee updates
+  let assigneesChanged = false;
+  if (data.assigneeIds !== undefined) {
+    // Empty array → default to owner (events must have at least one assignee)
+    const newAssigneeIds = data.assigneeIds.length > 0 ? data.assigneeIds : [userId];
+
+    // Get current assignee IDs
+    const currentAssignees = await db.query.eventAssignees.findMany({
+      where: eq(eventAssignees.eventId, id),
+    });
+    const currentIds = currentAssignees.map((a) => a.userId).sort();
+    const newIds = [...newAssigneeIds].sort();
+
+    if (JSON.stringify(currentIds) !== JSON.stringify(newIds)) {
+      assigneesChanged = true;
+      changes.assigneeIds = { from: currentIds, to: newIds };
+
+      // Replace: delete all, insert new
+      await db.delete(eventAssignees).where(eq(eventAssignees.eventId, id));
+      await db
+        .insert(eventAssignees)
+        .values(newAssigneeIds.map((uid) => ({ eventId: id, userId: uid })));
+    }
   }
 
-  updateValues.updatedAt = new Date();
+  // No actual changes — return existing event with assignees
+  if (Object.keys(updateValues).length === 0 && !assigneesChanged) {
+    const assigneeRows = await db.query.eventAssignees.findMany({
+      where: eq(eventAssignees.eventId, id),
+      with: { user: true },
+    });
+    return c.json({ ...existing, assignees: formatAssignees(assigneeRows) });
+  }
 
-  const [updated] = await db.update(events).set(updateValues).where(eq(events.id, id)).returning();
+  let updated = existing;
+  if (Object.keys(updateValues).length > 0) {
+    updateValues.updatedAt = new Date();
+    [updated] = await db.update(events).set(updateValues).where(eq(events.id, id)).returning();
+  }
 
   // Log changes for shared events (or events transitioning to/from shared)
   const wasShared = !existing.private;
@@ -251,7 +316,13 @@ eventsApp.patch("/:id", async (c) => {
     });
   }
 
-  return c.json(updated);
+  // Fetch assignees for response
+  const assigneeRows = await db.query.eventAssignees.findMany({
+    where: eq(eventAssignees.eventId, id),
+    with: { user: true },
+  });
+
+  return c.json({ ...updated, assignees: formatAssignees(assigneeRows) });
 });
 
 // DELETE /:id — Delete event

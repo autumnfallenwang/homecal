@@ -2,7 +2,6 @@
 
 import { type MouseEvent, useEffect, useRef } from "react";
 import type { CalendarEvent } from "@/hooks/use-events";
-import type { Member } from "@/hooks/use-members";
 import { isToday } from "@/lib/calendar-utils";
 import { cn } from "@/lib/utils";
 import { WeekEventBlock } from "./week-event-block";
@@ -17,7 +16,6 @@ const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 interface WeekGridProps {
   weekDates: Date[];
   events: CalendarEvent[];
-  members: Member[];
   onEventClick?: (eventId: string) => void;
   onSlotClick?: (date: Date) => void;
 }
@@ -96,10 +94,8 @@ function positionEvents(dayEvents: CalendarEvent[]): PositionedEvent[] {
   return positioned;
 }
 
-export function WeekGrid({ weekDates, events, members, onEventClick, onSlotClick }: WeekGridProps) {
+export function WeekGrid({ weekDates, events, onEventClick, onSlotClick }: WeekGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  const memberColorMap = new Map(members.map((m) => [m.id, m.color]));
 
   // Group events by day
   const eventsByDay = new Map<string, CalendarEvent[]>();
@@ -211,7 +207,7 @@ export function WeekGrid({ weekDates, events, members, onEventClick, onSlotClick
 
                 {/* Events */}
                 {positioned.map((p) => {
-                  const color = memberColorMap.get(p.event.ownerId) ?? "#6b7280";
+                  const color = p.event.assignees[0]?.color ?? "#6b7280";
                   const startDate = new Date(p.event.start);
                   const endDate = new Date(p.event.end);
                   return (

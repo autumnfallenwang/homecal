@@ -4,7 +4,7 @@ import postgres from "postgres";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as schema from "../../src/db/schema.js";
 
-const { users, events, eventLogs, sessions, accounts } = schema;
+const { users, events, eventAssignees, eventLogs, sessions, accounts } = schema;
 
 const TEST_DATABASE_URL = process.env.DATABASE_URL;
 if (!TEST_DATABASE_URL) {
@@ -25,6 +25,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   // Clean tables in FK-safe order
+  await db.delete(eventAssignees);
   await db.delete(eventLogs);
   await db.delete(events);
   await db.delete(sessions);
@@ -304,6 +305,145 @@ describe("eventLogs table", () => {
   });
 });
 
+describe("eventAssignees table", () => {
+  it("inserts an assignee linked to event and user", async () => {
+    const [user] = await db
+      .insert(users)
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
+      .returning();
+
+    const [event] = await db
+      .insert(events)
+      .values({
+        title: "Dentist",
+        start: new Date("2026-03-01T10:00:00Z"),
+        end: new Date("2026-03-01T11:00:00Z"),
+        ownerId: user.id,
+      })
+      .returning();
+
+    const [assignee] = await db
+      .insert(eventAssignees)
+      .values({ eventId: event.id, userId: user.id })
+      .returning();
+
+    expect(assignee.id).toBeDefined();
+    expect(assignee.eventId).toBe(event.id);
+    expect(assignee.userId).toBe(user.id);
+  });
+
+  it("enforces unique constraint on (eventId, userId)", async () => {
+    const [user] = await db
+      .insert(users)
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
+      .returning();
+
+    const [event] = await db
+      .insert(events)
+      .values({
+        title: "Dentist",
+        start: new Date("2026-03-01T10:00:00Z"),
+        end: new Date("2026-03-01T11:00:00Z"),
+        ownerId: user.id,
+      })
+      .returning();
+
+    await db.insert(eventAssignees).values({ eventId: event.id, userId: user.id });
+
+    await expect(
+      db.insert(eventAssignees).values({ eventId: event.id, userId: user.id }),
+    ).rejects.toThrow();
+  });
+
+  it("enforces foreign key constraint on eventId", async () => {
+    const [user] = await db
+      .insert(users)
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
+      .returning();
+
+    const fakeEventId = "00000000-0000-0000-0000-000000000000";
+    await expect(
+      db.insert(eventAssignees).values({ eventId: fakeEventId, userId: user.id }),
+    ).rejects.toThrow();
+  });
+
+  it("enforces foreign key constraint on userId", async () => {
+    const [user] = await db
+      .insert(users)
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
+      .returning();
+
+    const [event] = await db
+      .insert(events)
+      .values({
+        title: "Dentist",
+        start: new Date("2026-03-01T10:00:00Z"),
+        end: new Date("2026-03-01T11:00:00Z"),
+        ownerId: user.id,
+      })
+      .returning();
+
+    const fakeUserId = "00000000-0000-0000-0000-000000000000";
+    await expect(
+      db.insert(eventAssignees).values({ eventId: event.id, userId: fakeUserId }),
+    ).rejects.toThrow();
+  });
+
+  it("cascades delete from event to assignees", async () => {
+    const [user] = await db
+      .insert(users)
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
+      .returning();
+
+    const [event] = await db
+      .insert(events)
+      .values({
+        title: "Dentist",
+        start: new Date("2026-03-01T10:00:00Z"),
+        end: new Date("2026-03-01T11:00:00Z"),
+        ownerId: user.id,
+      })
+      .returning();
+
+    await db.insert(eventAssignees).values({ eventId: event.id, userId: user.id });
+
+    await db.delete(events).where(eq(events.id, event.id));
+
+    const remaining = await db.select().from(eventAssignees);
+    expect(remaining).toHaveLength(0);
+  });
+
+  it("cascades delete from user to assignees", async () => {
+    const [user] = await db
+      .insert(users)
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
+      .returning();
+
+    const [event] = await db
+      .insert(events)
+      .values({
+        title: "Dentist",
+        start: new Date("2026-03-01T10:00:00Z"),
+        end: new Date("2026-03-01T11:00:00Z"),
+        ownerId: user.id,
+      })
+      .returning();
+
+    // Add a second user as assignee so we can delete them without cascading through events
+    const [user2] = await db
+      .insert(users)
+      .values({ name: "Bob", email: "bob@test.com", emailVerified: false, color: "#0000ff" })
+      .returning();
+
+    await db.insert(eventAssignees).values({ eventId: event.id, userId: user2.id });
+
+    await db.delete(users).where(eq(users.id, user2.id));
+
+    const remaining = await db.select().from(eventAssignees);
+    expect(remaining).toHaveLength(0);
+  });
+});
+
 describe("relational queries", () => {
   it("queries user with their events", async () => {
     const [user] = await db
@@ -394,5 +534,66 @@ describe("relational queries", () => {
     expect(result?.accounts).toHaveLength(1);
     expect(result?.sessions[0].token).toBe("session-token");
     expect(result?.accounts[0].providerId).toBe("credential");
+  });
+
+  it("queries event with assignees", async () => {
+    const [user] = await db
+      .insert(users)
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
+      .returning();
+
+    const [user2] = await db
+      .insert(users)
+      .values({ name: "Bob", email: "bob@test.com", emailVerified: false, color: "#0000ff" })
+      .returning();
+
+    const [event] = await db
+      .insert(events)
+      .values({
+        title: "Family dinner",
+        start: new Date("2026-03-01T18:00:00Z"),
+        end: new Date("2026-03-01T20:00:00Z"),
+        ownerId: user.id,
+      })
+      .returning();
+
+    await db.insert(eventAssignees).values([
+      { eventId: event.id, userId: user.id },
+      { eventId: event.id, userId: user2.id },
+    ]);
+
+    const result = await db.query.events.findFirst({
+      where: eq(events.id, event.id),
+      with: { assignees: true },
+    });
+
+    expect(result?.assignees).toHaveLength(2);
+  });
+
+  it("queries assignee with user details", async () => {
+    const [user] = await db
+      .insert(users)
+      .values({ name: "Alice", email: "alice@test.com", emailVerified: false, color: "#ff0000" })
+      .returning();
+
+    const [event] = await db
+      .insert(events)
+      .values({
+        title: "Dentist",
+        start: new Date("2026-03-01T10:00:00Z"),
+        end: new Date("2026-03-01T11:00:00Z"),
+        ownerId: user.id,
+      })
+      .returning();
+
+    await db.insert(eventAssignees).values({ eventId: event.id, userId: user.id });
+
+    const result = await db.query.eventAssignees.findFirst({
+      where: eq(eventAssignees.eventId, event.id),
+      with: { user: true },
+    });
+
+    expect(result?.user.name).toBe("Alice");
+    expect(result?.user.color).toBe("#ff0000");
   });
 });

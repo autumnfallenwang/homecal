@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid().primaryKey().defaultRandom(),
@@ -94,11 +94,30 @@ export const eventLogs = pgTable(
   (table) => [index("event_logs_event_id_idx").on(table.eventId)],
 );
 
+export const eventAssignees = pgTable(
+  "event_assignees",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    eventId: uuid()
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    index("event_assignees_event_id_idx").on(table.eventId),
+    index("event_assignees_user_id_idx").on(table.userId),
+    unique("event_assignees_event_user_unique").on(table.eventId, table.userId),
+  ],
+);
+
 // Relations for Drizzle relational query builder
 
 export const usersRelations = relations(users, ({ many }) => ({
   events: many(events),
   eventLogs: many(eventLogs),
+  eventAssignees: many(eventAssignees),
   sessions: many(sessions),
   accounts: many(accounts),
 }));
@@ -114,6 +133,7 @@ export const accountsRelations = relations(accounts, ({ one }) => ({
 export const eventsRelations = relations(events, ({ one, many }) => ({
   owner: one(users, { fields: [events.ownerId], references: [users.id] }),
   logs: many(eventLogs),
+  assignees: many(eventAssignees),
 }));
 
 export const eventLogsRelations = relations(eventLogs, ({ one }) => ({
@@ -122,4 +142,9 @@ export const eventLogsRelations = relations(eventLogs, ({ one }) => ({
     references: [events.id],
   }),
   user: one(users, { fields: [eventLogs.userId], references: [users.id] }),
+}));
+
+export const eventAssigneesRelations = relations(eventAssignees, ({ one }) => ({
+  event: one(events, { fields: [eventAssignees.eventId], references: [events.id] }),
+  user: one(users, { fields: [eventAssignees.userId], references: [users.id] }),
 }));

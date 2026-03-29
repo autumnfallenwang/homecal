@@ -66,6 +66,18 @@ export function getWeekEnd(weekDates: Date[]): string {
   return new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1).toISOString();
 }
 
+export function getDayStart(date: Date): string {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString();
+}
+
+export function getDayEnd(date: Date): string {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).toISOString();
+}
+
+export function formatDayTitle(date: Date): string {
+  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
 export function formatWeekRange(weekDates: Date[]): string {
   const first = weekDates[0];
   const last = weekDates[weekDates.length - 1];

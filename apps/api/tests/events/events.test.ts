@@ -87,6 +87,33 @@ describe("createEventSchema", () => {
     const result = createEventSchema.safeParse({ ...validEvent, private: "yes" });
     expect(result.success).toBe(false);
   });
+
+  it("accepts assigneeIds as array of UUIDs", () => {
+    const result = createEventSchema.safeParse({
+      ...validEvent,
+      assigneeIds: ["550e8400-e29b-41d4-a716-446655440000"],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.assigneeIds).toEqual(["550e8400-e29b-41d4-a716-446655440000"]);
+    }
+  });
+
+  it("accepts missing assigneeIds (optional)", () => {
+    const result = createEventSchema.safeParse(validEvent);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.assigneeIds).toBeUndefined();
+    }
+  });
+
+  it("rejects non-UUID strings in assigneeIds", () => {
+    const result = createEventSchema.safeParse({
+      ...validEvent,
+      assigneeIds: ["not-a-uuid"],
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("updateEventSchema", () => {
@@ -134,6 +161,21 @@ describe("updateEventSchema", () => {
     if (result.success) {
       expect("ownerId" in result.data).toBe(false);
     }
+  });
+
+  it("accepts assigneeIds alone", () => {
+    const result = updateEventSchema.safeParse({
+      assigneeIds: ["550e8400-e29b-41d4-a716-446655440000"],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts assigneeIds with other fields", () => {
+    const result = updateEventSchema.safeParse({
+      title: "Updated",
+      assigneeIds: ["550e8400-e29b-41d4-a716-446655440000"],
+    });
+    expect(result.success).toBe(true);
   });
 });
 

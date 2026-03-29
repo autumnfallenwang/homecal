@@ -5,6 +5,7 @@ export const createEventSchema = z.object({
   start: z.iso.datetime(),
   end: z.iso.datetime(),
   private: z.boolean().optional().default(false),
+  assigneeIds: z.array(z.string().uuid()).optional(),
 });
 
 export const updateEventSchema = z
@@ -13,6 +14,7 @@ export const updateEventSchema = z
     start: z.iso.datetime().optional(),
     end: z.iso.datetime().optional(),
     private: z.boolean().optional(),
+    assigneeIds: z.array(z.string().uuid()).optional(),
   })
   .refine((d) => Object.values(d).some((v) => v !== undefined), {
     message: "At least one field must be provided",
@@ -31,6 +33,7 @@ export const parsedEventSchema = z.object({
   title: z.string().min(1).max(200),
   start: z.iso.datetime(),
   end: z.iso.datetime(),
+  assignees: z.array(z.string()).optional().default([]),
 });
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;

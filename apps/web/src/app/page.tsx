@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { CalendarHeader } from "@/components/calendar/calendar-header";
+import { DayGrid } from "@/components/calendar/day-grid";
 import { EventDialog, type ParsedEvent } from "@/components/calendar/event-dialog";
 import { MemberFilter } from "@/components/calendar/member-filter";
 import { MonthGrid } from "@/components/calendar/month-grid";
@@ -10,8 +11,11 @@ import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 import { type CalendarEvent, useEvents } from "@/hooks/use-events";
 import { useMembers } from "@/hooks/use-members";
 import {
+  formatDayTitle,
   formatMonthYear,
   formatWeekRange,
+  getDayEnd,
+  getDayStart,
   getGridEnd,
   getGridStart,
   getMonthGridDates,
@@ -27,9 +31,10 @@ function currentYearMonth() {
 
 export default function HomePage() {
   const { session, isPending } = useAuthRedirect(true);
-  const [view, setView] = useState<"month" | "week">("month");
+  const [view, setView] = useState<"month" | "week" | "day">("month");
   const [{ year, month }, setYearMonth] = useState(currentYearMonth);
   const [weekAnchor, setWeekAnchor] = useState(() => new Date());
+  const [dayAnchor, setDayAnchor] = useState(() => new Date());
   const [visibleMemberIds, setVisibleMemberIds] = useState<Set<string> | null>(null);
   const [dialogDate, setDialogDate] = useState<Date | null>(null);
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
@@ -39,14 +44,17 @@ export default function HomePage() {
   const gridDates = useMemo(() => getMonthGridDates(year, month), [year, month]);
   const weekDates = useMemo(() => getWeekDates(weekAnchor), [weekAnchor]);
 
-  const from = useMemo(
-    () => (view === "month" ? getGridStart(gridDates) : getWeekStart(weekDates)),
-    [view, gridDates, weekDates],
-  );
-  const to = useMemo(
-    () => (view === "month" ? getGridEnd(gridDates) : getWeekEnd(weekDates)),
-    [view, gridDates, weekDates],
-  );
+  const from = useMemo(() => {
+    if (view === "month") return getGridStart(gridDates);
+    if (view === "week") return getWeekStart(weekDates);
+    return getDayStart(dayAnchor);
+  }, [view, gridDates, weekDates, dayAnchor]);
+
+  const to = useMemo(() => {
+    if (view === "month") return getGridEnd(gridDates);
+    if (view === "week") return getWeekEnd(weekDates);
+    return getDayEnd(dayAnchor);
+  }, [view, gridDates, weekDates, dayAnchor]);
 
   const { events, refetch } = useEvents(from, to);
   const { members, isLoading: membersLoading } = useMembers();
@@ -59,7 +67,7 @@ export default function HomePage() {
   }, [visibleMemberIds, members]);
 
   const filteredEvents = useMemo(
-    () => events.filter((e) => activeMemberIds.has(e.ownerId)),
+    () => events.filter((e) => e.assignees.some((a) => activeMemberIds.has(a.id))),
     [events, activeMemberIds],
   );
 
@@ -85,23 +93,44 @@ export default function HomePage() {
     setWeekAnchor((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7));
   }, []);
 
-  const handlePrev = view === "month" ? handlePrevMonth : handlePrevWeek;
-  const handleNext = view === "month" ? handleNextMonth : handleNextWeek;
+  const handlePrevDay = useCallback(() => {
+    setDayAnchor((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 1));
+  }, []);
 
-  const headerTitle = view === "month" ? formatMonthYear(year, month) : formatWeekRange(weekDates);
+  const handleNextDay = useCallback(() => {
+    setDayAnchor((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 1));
+  }, []);
+
+  const navHandlers = {
+    month: { prev: handlePrevMonth, next: handleNextMonth },
+    week: { prev: handlePrevWeek, next: handleNextWeek },
+    day: { prev: handlePrevDay, next: handleNextDay },
+  };
+  const handlePrev = navHandlers[view].prev;
+  const handleNext = navHandlers[view].next;
+
+  const headerTitles = {
+    month: formatMonthYear(year, month),
+    week: formatWeekRange(weekDates),
+    day: formatDayTitle(dayAnchor),
+  };
+  const headerTitle = headerTitles[view];
 
   const handleViewChange = useCallback(
-    (newView: "month" | "week") => {
+    (newView: "month" | "week" | "day") => {
       if (newView === view) return;
       if (newView === "week") {
-        setWeekAnchor(new Date());
+        setWeekAnchor(view === "day" ? dayAnchor : new Date());
+      } else if (newView === "day") {
+        setDayAnchor(view === "week" ? weekAnchor : new Date());
       } else {
-        // Set month from week anchor
-        setYearMonth({ year: weekAnchor.getFullYear(), month: weekAnchor.getMonth() });
+        // month — derive from current anchor
+        const anchor = view === "week" ? weekAnchor : dayAnchor;
+        setYearMonth({ year: anchor.getFullYear(), month: anchor.getMonth() });
       }
       setView(newView);
     },
-    [view, weekAnchor],
+    [view, weekAnchor, dayAnchor],
   );
 
   const handleToggleMember = useCallback(
@@ -131,7 +160,12 @@ export default function HomePage() {
       });
       if (!res.ok) throw new Error("Parse failed");
       const data = await res.json();
-      setParsedEvent({ title: data.title, start: data.start, end: data.end });
+      setParsedEvent({
+        title: data.title,
+        start: data.start,
+        end: data.end,
+        assigneeIds: data.assigneeIds,
+      });
       setDialogDate(new Date());
     } catch (err) {
       console.error("Smart input error:", err);
@@ -187,20 +221,27 @@ export default function HomePage() {
           />
         </aside>
         <main className="flex flex-1 overflow-auto p-4">
-          {view === "month" ? (
+          {view === "month" && (
             <MonthGrid
               year={year}
               month={month}
               events={filteredEvents}
-              members={members}
               onEventClick={handleEventClick}
               onDayClick={handleDayClick}
             />
-          ) : (
+          )}
+          {view === "week" && (
             <WeekGrid
               weekDates={weekDates}
               events={filteredEvents}
-              members={members}
+              onEventClick={handleEventClick}
+              onSlotClick={handleSlotClick}
+            />
+          )}
+          {view === "day" && (
+            <DayGrid
+              date={dayAnchor}
+              events={filteredEvents}
               onEventClick={handleEventClick}
               onSlotClick={handleSlotClick}
             />
@@ -211,6 +252,7 @@ export default function HomePage() {
         date={dialogDate}
         event={editEvent}
         parsedEvent={parsedEvent}
+        members={members}
         onClose={() => {
           setDialogDate(null);
           setEditEvent(null);

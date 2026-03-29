@@ -38,9 +38,9 @@
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 21 | Assignees schema + migration | Not started | `event_assignees` join table, backfill existing events (owner = default assignee) |
-| 22 | Assignees API | Not started | Update create/update/get endpoints for assignees array, shared Zod schemas |
-| 23 | Assignees web UI | Not started | Multi-select member picker in EventDialog, filter sidebar filters by assignee |
+| 21 | Assignees schema + migration | ✅ Done | `event_assignees` join table (id, eventId, userId), unique constraint, cascade deletes, backfill migration (owner → assignee), 10 new tests |
+| 22 | Assignees API | ✅ Done | Zod schemas + all CRUD endpoints return assignees array, assignee change logging, 7 new integration tests |
+| 23 | Assignees web UI | ✅ Done | Multi-select assignee picker in EventDialog, filter by assignee (not owner), event pills colored by first assignee |
 | 24 | Assignees iOS UI | Not started | Multi-select member picker in EventFormView, filter by assignee |
 
 ## Phase 5: Reminders + Notifications
@@ -64,16 +64,17 @@
 ## What's Working
 
 - Monorepo: `apps/api` (Hono, port 3001), `apps/web` (Next.js, port 3000), `apps/ios` (SwiftUI), `packages/shared`
-- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (63 unit tests + integration tests; 13 Swift tests)
+- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (70 unit tests + 98 integration tests; 13 Swift tests)
 - Docker PostgreSQL: `scripts/db-start.sh` / `db-stop.sh` / `db-reset.sh`
 - Auth: signup, signin, signout, session check, admin plugin, bearer token plugin, `requireAuth` middleware (cookies + bearer)
 - Events CRUD: 5 endpoints with visibility rules, Zod validation, change logging, date range filtering
 - Users list: `GET /api/users` returns `[{ id, name, color }]` ordered by name, auth-protected
 - Frontend: Tailwind v4 + shadcn/ui, login/register/home pages, auth redirect hook
-- Calendar month view: 42-cell grid (Mon start), color-coded event pills, member filter sidebar, prev/next nav
-- Calendar week view: 24-hour scrollable grid, month/week toggle, click-to-create, overlap handling
-- Event create/edit/delete: unified EventDialog with inline confirmation, change log history
+- Calendar month view: 42-cell grid (Mon start), event pills colored by first assignee, member filter sidebar (filters by assignee), prev/next nav
+- Calendar week view: 24-hour scrollable grid, month/week toggle, click-to-create, overlap handling, event blocks colored by first assignee
+- Event create/edit/delete: unified EventDialog with inline confirmation, change log history, multi-select assignee picker (checkbox list per member)
 - Smart input: `POST /api/events/parse` with LLM service, CalendarHeader text input, Haiku default + Gemma fallback
+- Event assignees: `event_assignees` join table with unique (eventId, userId) constraint, cascade deletes, existing events backfilled with owner as assignee; all CRUD endpoints return `assignees: [{ id, name, color }]`, create defaults owner as assignee, PATCH replaces assignees, changes logged in event history
 - LAN setup: Arch Linux (192.168.1.163) backend, Mac Air web frontend + iOS dev
 - Bearer auth: configurable CORS origins via `CORS_ORIGINS` env var
 - iOS app: Swift package (SPM, iOS 18+), actor-based APIClient with all endpoints (auth, events CRUD, members, parse), data models, SwiftLint config, test target
@@ -85,7 +86,7 @@
 
 ## What's Next
 
-Task 21: Assignees schema + migration — `event_assignees` join table (backend work on Arch).
+Task 24: Assignees iOS UI — multi-select member picker in EventFormView, filter by assignee.
 
 ## Reference Docs
 

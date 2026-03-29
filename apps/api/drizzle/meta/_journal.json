@@ -8,6 +8,13 @@
       "when": 1771921102061,
       "tag": "0000_redundant_thundra",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1774451113101,
+      "tag": "0001_supreme_king_cobra",
+      "breakpoints": true
     }
   ]
 }

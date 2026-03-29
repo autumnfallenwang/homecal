@@ -1,7 +1,6 @@
 "use client";
 
 import type { CalendarEvent } from "@/hooks/use-events";
-import type { Member } from "@/hooks/use-members";
 import * as calUtils from "@/lib/calendar-utils";
 import { DayCell } from "./day-cell";
 
@@ -11,7 +10,6 @@ interface MonthGridProps {
   year: number;
   month: number;
   events: CalendarEvent[];
-  members: Member[];
   onEventClick?: (eventId: string) => void;
   onDayClick?: (date: Date) => void;
 }
@@ -20,14 +18,7 @@ function dateKey(date: Date): string {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
-export function MonthGrid({
-  year,
-  month,
-  events,
-  members,
-  onEventClick,
-  onDayClick,
-}: MonthGridProps) {
+export function MonthGrid({ year, month, events, onEventClick, onDayClick }: MonthGridProps) {
   const gridDates = calUtils.getMonthGridDates(year, month);
 
   // Group events by their start date (local timezone)
@@ -64,7 +55,6 @@ export function MonthGrid({
             key={date.toISOString()}
             date={date}
             events={eventsByDay.get(dateKey(date)) ?? []}
-            members={members}
             isCurrentMonth={calUtils.isSameMonth(date, year, month)}
             isToday={calUtils.isToday(date)}
             onEventClick={onEventClick}

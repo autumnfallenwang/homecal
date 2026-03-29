@@ -11,6 +11,7 @@ export interface CalendarEvent {
   private: boolean;
   createdAt: string;
   updatedAt: string;
+  assignees: { id: string; name: string; color: string }[];
 }
 
 export function useEvents(from: string, to: string) {
