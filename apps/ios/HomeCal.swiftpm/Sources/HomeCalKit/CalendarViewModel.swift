@@ -36,7 +36,9 @@ public final class CalendarViewModel: @unchecked Sendable {
     // MARK: - Computed
 
     public var filteredEvents: [CalendarEvent] {
-        events.filter { visibleMemberIds.contains($0.ownerId) }
+        events.filter { event in
+            event.assignees.contains { visibleMemberIds.contains($0.id) }
+        }
     }
 
     public var currentMonthGridDates: [Date] {

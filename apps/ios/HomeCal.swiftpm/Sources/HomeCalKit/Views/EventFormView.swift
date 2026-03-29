@@ -9,6 +9,8 @@ struct EventFormView: View {
     let eventId: String?
     let initialDate: Date?
     let parsedEvent: ParsedEvent?
+    let members: [Member]
+    let currentUserId: String?
 
     @State private var title = ""
     @State private var startDate = Date()
@@ -21,6 +23,7 @@ struct EventFormView: View {
     @State private var isLoadingEvent = false
     @State private var logs: [EventLogEntry] = []
     @State private var showLogs = false
+    @State private var selectedAssigneeIds: Set<String> = []
 
     private var isEditMode: Bool { eventId != nil }
 
@@ -32,6 +35,10 @@ struct EventFormView: View {
                     DatePicker("Start", selection: $startDate)
                     DatePicker("End", selection: $endDate)
                     Toggle("Private", isOn: $isPrivate)
+                }
+
+                if !members.isEmpty {
+                    assigneesSection
                 }
 
                 if let errorMessage {
@@ -144,13 +151,55 @@ struct EventFormView: View {
                     if let end = parsedEvent.localEndDate() {
                         endDate = end
                     }
+                    if let ids = parsedEvent.assigneeIds, !ids.isEmpty {
+                        selectedAssigneeIds = Set(ids)
+                    } else if let userId = currentUserId {
+                        selectedAssigneeIds = [userId]
+                    }
                 } else if let initialDate {
                     startDate = initialDate
                     let calendar = Calendar.current
                     endDate = calendar.date(byAdding: .hour, value: 1, to: initialDate) ?? initialDate
+                    if let userId = currentUserId {
+                        selectedAssigneeIds = [userId]
+                    }
                 }
             }
         }
+    }
+
+    // MARK: - Subviews
+
+    private var assigneesSection: some View {
+        Section("Assignees") {
+            ForEach(members, id: \.id) { (member: Member) in
+                assigneeRow(member)
+            }
+        }
+    }
+
+    private func assigneeRow(_ member: Member) -> some View {
+        Button {
+            if selectedAssigneeIds.contains(member.id) {
+                selectedAssigneeIds.remove(member.id)
+            } else {
+                selectedAssigneeIds.insert(member.id)
+            }
+        } label: {
+            HStack {
+                Circle()
+                    .fill(Color(hex: member.color))
+                    .frame(width: 10, height: 10)
+                Text(member.name)
+                    .foregroundStyle(.primary)
+                Spacer()
+                if selectedAssigneeIds.contains(member.id) {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Actions
@@ -165,6 +214,7 @@ struct EventFormView: View {
             startDate = event.start
             endDate = event.end
             isPrivate = event.isPrivate
+            selectedAssigneeIds = Set(event.assignees.map(\.id))
         } catch {
             errorMessage = error.localizedDescription
             return
@@ -196,7 +246,8 @@ struct EventFormView: View {
                     title: trimmedTitle,
                     start: startStr,
                     end: endStr,
-                    isPrivate: isPrivate
+                    isPrivate: isPrivate,
+                    assigneeIds: Array(selectedAssigneeIds)
                 )
                 _ = try await apiClient.updateEvent(id: eventId, input)
             } else {
@@ -204,7 +255,8 @@ struct EventFormView: View {
                     title: trimmedTitle,
                     start: startStr,
                     end: endStr,
-                    isPrivate: isPrivate
+                    isPrivate: isPrivate,
+                    assigneeIds: Array(selectedAssigneeIds)
                 )
                 _ = try await apiClient.createEvent(input)
             }

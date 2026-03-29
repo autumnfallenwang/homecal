@@ -5,16 +5,21 @@ public struct CreateEventInput: Encodable, Sendable {
     public let start: String
     public let end: String
     public let isPrivate: Bool?
+    public let assigneeIds: [String]?
 
-    public init(title: String, start: String, end: String, isPrivate: Bool? = nil) {
+    public init(
+        title: String, start: String, end: String,
+        isPrivate: Bool? = nil, assigneeIds: [String]? = nil
+    ) {
         self.title = title
         self.start = start
         self.end = end
         self.isPrivate = isPrivate
+        self.assigneeIds = assigneeIds
     }
 
     enum CodingKeys: String, CodingKey {
-        case title, start, end
+        case title, start, end, assigneeIds
         case isPrivate = "private"
     }
 }
@@ -24,16 +29,21 @@ public struct UpdateEventInput: Encodable, Sendable {
     public var start: String?
     public var end: String?
     public var isPrivate: Bool?
+    public var assigneeIds: [String]?
 
-    public init(title: String? = nil, start: String? = nil, end: String? = nil, isPrivate: Bool? = nil) {
+    public init(
+        title: String? = nil, start: String? = nil, end: String? = nil,
+        isPrivate: Bool? = nil, assigneeIds: [String]? = nil
+    ) {
         self.title = title
         self.start = start
         self.end = end
         self.isPrivate = isPrivate
+        self.assigneeIds = assigneeIds
     }
 
     enum CodingKeys: String, CodingKey {
-        case title, start, end
+        case title, start, end, assigneeIds
         case isPrivate = "private"
     }
 }
@@ -50,6 +60,7 @@ public struct ParsedEvent: Decodable, Sendable {
     public let title: String
     public let start: String
     public let end: String
+    public let assigneeIds: [String]?
 }
 
 extension ParsedEvent {

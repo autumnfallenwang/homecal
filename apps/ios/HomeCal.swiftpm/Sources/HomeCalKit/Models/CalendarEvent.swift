@@ -9,9 +9,10 @@ public struct CalendarEvent: Codable, Identifiable, Sendable {
     public let isPrivate: Bool
     public let createdAt: Date
     public let updatedAt: Date
+    public let assignees: [Member]
 
     enum CodingKeys: String, CodingKey {
-        case id, title, start, end, ownerId, createdAt, updatedAt
+        case id, title, start, end, ownerId, createdAt, updatedAt, assignees
         case isPrivate = "private"
     }
 }
@@ -26,9 +27,10 @@ public struct CalendarEventWithOwner: Codable, Identifiable, Sendable {
     public let createdAt: Date
     public let updatedAt: Date
     public let owner: EventOwner
+    public let assignees: [Member]
 
     enum CodingKeys: String, CodingKey {
-        case id, title, start, end, ownerId, createdAt, updatedAt, owner
+        case id, title, start, end, ownerId, createdAt, updatedAt, owner, assignees
         case isPrivate = "private"
     }
 }

@@ -90,7 +90,7 @@ private struct MonthDayCellView: View {
             // Event pills
             let visible = Array(events.prefix(maxVisiblePills))
             ForEach(visible, id: \.id) { event in
-                let color = Color(hex: memberColorMap[event.ownerId] ?? "#6b7280")
+                let color = Color(hex: event.assignees.first?.color ?? "#6b7280")
                 EventPillView(title: event.title, color: color) {
                     onTapEvent(event.id)
                 }

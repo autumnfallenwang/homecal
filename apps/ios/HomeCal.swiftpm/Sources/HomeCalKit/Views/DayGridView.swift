@@ -79,7 +79,7 @@ struct DayGridView: View {
 
             // Event blocks
             ForEach(positioned, id: \.event.id) { item in
-                let color = Color(hex: memberColorMap[item.event.ownerId] ?? "#6b7280")
+                let color = Color(hex: item.event.assignees.first?.color ?? "#6b7280")
                 GeometryReader { geo in
                     let colWidth = geo.size.width / CGFloat(item.totalCols)
                     WeekEventBlockView(

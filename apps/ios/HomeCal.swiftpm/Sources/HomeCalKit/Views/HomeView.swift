@@ -129,7 +129,9 @@ public struct HomeView: View {
                         onSave: {},
                         eventId: nil,
                         initialDate: viewModel.selectedNewEventDate,
-                        parsedEvent: viewModel.parsedEvent
+                        parsedEvent: viewModel.parsedEvent,
+                        members: viewModel.members,
+                        currentUserId: authManager.currentUser?.id
                     )
                 }
             )
@@ -145,7 +147,9 @@ public struct HomeView: View {
                         onSave: {},
                         eventId: viewModel.selectedEventId,
                         initialDate: nil,
-                        parsedEvent: nil
+                        parsedEvent: nil,
+                        members: viewModel.members,
+                        currentUserId: authManager.currentUser?.id
                     )
                 }
             )
