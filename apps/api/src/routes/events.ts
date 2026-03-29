@@ -139,12 +139,16 @@ eventsApp.get("/", async (c) => {
   const result = await db.query.events.findMany({
     where: and(...conditions),
     orderBy: events.start,
-    with: { assignees: { with: { user: true } } },
+    with: { assignees: { with: { user: true } }, reminders: true },
   });
 
   const shaped = result.map((e) => {
-    const { assignees: rawAssignees, ...rest } = e;
-    return { ...rest, assignees: formatAssignees(rawAssignees) };
+    const { assignees: rawAssignees, reminders: rawReminders, ...rest } = e;
+    return {
+      ...rest,
+      assignees: formatAssignees(rawAssignees),
+      reminders: rawReminders.map((r) => ({ id: r.id, minutesBefore: r.minutesBefore })),
+    };
   });
 
   return c.json(shaped);
@@ -157,7 +161,7 @@ eventsApp.get("/:id", async (c) => {
 
   const result = await db.query.events.findFirst({
     where: eq(events.id, id),
-    with: { owner: true, assignees: { with: { user: true } } },
+    with: { owner: true, assignees: { with: { user: true } }, reminders: true },
   });
 
   if (!result) {
@@ -169,8 +173,12 @@ eventsApp.get("/:id", async (c) => {
     return c.json({ error: "Not found" }, 404);
   }
 
-  const { assignees: rawAssignees, ...rest } = result;
-  return c.json({ ...rest, assignees: formatAssignees(rawAssignees) });
+  const { assignees: rawAssignees, reminders: rawReminders, ...rest } = result;
+  return c.json({
+    ...rest,
+    assignees: formatAssignees(rawAssignees),
+    reminders: rawReminders.map((r) => ({ id: r.id, minutesBefore: r.minutesBefore })),
+  });
 });
 
 // GET /:id/logs — Get event change logs

@@ -36,8 +36,21 @@ export const parsedEventSchema = z.object({
   assignees: z.array(z.string()).optional().default([]),
 });
 
+// Reminders
+export const createReminderSchema = z.object({
+  minutesBefore: z.number().int().positive().max(10080), // max 1 week
+});
+
+// Device tokens
+export const registerDeviceSchema = z.object({
+  platform: z.enum(["ios", "web"]),
+  token: z.string().min(1).max(4096),
+});
+
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type EventQuery = z.infer<typeof eventQuerySchema>;
 export type ParseEventInput = z.infer<typeof parseEventInputSchema>;
 export type ParsedEvent = z.infer<typeof parsedEventSchema>;
+export type CreateReminderInput = z.infer<typeof createReminderSchema>;
+export type RegisterDeviceInput = z.infer<typeof registerDeviceSchema>;

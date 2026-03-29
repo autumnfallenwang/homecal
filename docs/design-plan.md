@@ -155,14 +155,14 @@ Adds the concept of "who is this event for" — separate from "who created it."
 23. Assignees web UI — multi-select member picker in EventDialog, filter sidebar filters by assignee
 24. Assignees iOS UI — multi-select member picker in EventFormView, filter by assignee
 
-### Phase 5 — Reminders + Notifications
-Backend-driven reminders that notify assignees across all their devices.
+### Phase 5 — Reminders + iOS Push Notifications
+Backend-driven reminders that notify assignees on their iOS devices. Web app is view/edit only — no push notifications (low value for a desktop browser when users have the iOS app in their pocket).
 25. Reminders schema + API — `event_reminders` table (eventId, minutesBefore), `device_tokens` table (userId, platform, token), CRUD endpoints for reminders and device registration
-26. Reminder scheduler — backend cron/timer that checks for due reminders, dispatches to notification channels
-27. Web Push notifications — Service Worker + Web Push API, device token registration, browser notification display
-28. iOS push notifications — APNs integration, device token registration, notification handling (requires physical device + Apple Developer account)
+26. Reminder scheduler + APNs — setInterval cron (every 60s), query due reminders (event.start - minutesBefore <= now, not yet sent), APNs client for push dispatch, `sentAt` column to prevent duplicates, mock-tested (real APNs requires Apple Developer certificate)
+27. iOS reminder UI — reminder picker in EventFormView (15min/1hr/1day before), device token registration on app launch
 
 ### Phase 6 — Future Enhancements (deferred)
+- Web Push notifications — Service Worker + Web Push API (add if users want desktop alerts)
 - iOS voice input — Speech framework mic button → parse endpoint (requires physical device)
 - Admin UI (user management — Better Auth admin APIs already exist)
 - Cloud deployment (Docker Compose / Vercel + Fly.io)

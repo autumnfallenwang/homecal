@@ -1,5 +1,15 @@
 import { relations } from "drizzle-orm";
-import { boolean, index, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid().primaryKey().defaultRandom(),
@@ -112,12 +122,48 @@ export const eventAssignees = pgTable(
   ],
 );
 
+export const eventReminders = pgTable(
+  "event_reminders",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    eventId: uuid()
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    minutesBefore: integer().notNull(),
+    sentAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("event_reminders_event_id_idx").on(table.eventId),
+    unique("event_reminders_event_minutes_unique").on(table.eventId, table.minutesBefore),
+  ],
+);
+
+export const deviceTokens = pgTable(
+  "device_tokens",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    platform: text().notNull(),
+    token: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("device_tokens_user_id_idx").on(table.userId),
+    unique("device_tokens_user_token_unique").on(table.userId, table.token),
+  ],
+);
+
 // Relations for Drizzle relational query builder
 
 export const usersRelations = relations(users, ({ many }) => ({
   events: many(events),
   eventLogs: many(eventLogs),
   eventAssignees: many(eventAssignees),
+  deviceTokens: many(deviceTokens),
   sessions: many(sessions),
   accounts: many(accounts),
 }));
@@ -134,6 +180,7 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   owner: one(users, { fields: [events.ownerId], references: [users.id] }),
   logs: many(eventLogs),
   assignees: many(eventAssignees),
+  reminders: many(eventReminders),
 }));
 
 export const eventLogsRelations = relations(eventLogs, ({ one }) => ({
@@ -147,4 +194,12 @@ export const eventLogsRelations = relations(eventLogs, ({ one }) => ({
 export const eventAssigneesRelations = relations(eventAssignees, ({ one }) => ({
   event: one(events, { fields: [eventAssignees.eventId], references: [events.id] }),
   user: one(users, { fields: [eventAssignees.userId], references: [users.id] }),
+}));
+
+export const eventRemindersRelations = relations(eventReminders, ({ one }) => ({
+  event: one(events, { fields: [eventReminders.eventId], references: [events.id] }),
+}));
+
+export const deviceTokensRelations = relations(deviceTokens, ({ one }) => ({
+  user: one(users, { fields: [deviceTokens.userId], references: [users.id] }),
 }));

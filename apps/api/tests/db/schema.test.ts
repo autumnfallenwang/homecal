@@ -2,8 +2,10 @@ import { getTableColumns, getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import {
   accounts,
+  deviceTokens,
   eventAssignees,
   eventLogs,
+  eventReminders,
   events,
   sessions,
   users,
@@ -20,6 +22,8 @@ describe("schema", () => {
       expect(getTableName(accounts)).toBe("accounts");
       expect(getTableName(verifications)).toBe("verifications");
       expect(getTableName(eventAssignees)).toBe("event_assignees");
+      expect(getTableName(eventReminders)).toBe("event_reminders");
+      expect(getTableName(deviceTokens)).toBe("device_tokens");
     });
   });
 
@@ -188,6 +192,36 @@ describe("schema", () => {
 
     it("has nullable changes column", () => {
       expect(columns.changes.notNull).toBe(false);
+    });
+  });
+
+  describe("eventReminders table", () => {
+    const columns = getTableColumns(eventReminders);
+
+    it("has all required columns", () => {
+      expect(Object.keys(columns)).toEqual(
+        expect.arrayContaining(["id", "eventId", "minutesBefore", "createdAt"]),
+      );
+    });
+
+    it("has uuid primary key with default", () => {
+      expect(columns.id.dataType).toBe("string");
+      expect(columns.id.hasDefault).toBe(true);
+    });
+  });
+
+  describe("deviceTokens table", () => {
+    const columns = getTableColumns(deviceTokens);
+
+    it("has all required columns", () => {
+      expect(Object.keys(columns)).toEqual(
+        expect.arrayContaining(["id", "userId", "platform", "token", "createdAt", "updatedAt"]),
+      );
+    });
+
+    it("has uuid primary key with default", () => {
+      expect(columns.id.dataType).toBe("string");
+      expect(columns.id.hasDefault).toBe(true);
     });
   });
 });

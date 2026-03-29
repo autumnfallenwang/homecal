@@ -43,19 +43,19 @@
 | 23 | Assignees web UI | ✅ Done | Multi-select assignee picker in EventDialog, filter by assignee (not owner), event pills colored by first assignee |
 | 24 | Assignees iOS UI | ✅ Done | Multi-select assignee picker in EventFormView, filter by assignee, event pills colored by first assignee |
 
-## Phase 5: Reminders + Notifications
+## Phase 5: Reminders + iOS Push Notifications
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 25 | Reminders schema + API | Not started | `event_reminders` + `device_tokens` tables, CRUD endpoints, device registration |
-| 26 | Reminder scheduler | Not started | Backend cron/timer, checks due reminders, dispatches notifications |
-| 27 | Web Push notifications | Not started | Service Worker + Web Push API, device token registration, browser notifications |
-| 28 | iOS push notifications | Not started | APNs integration, device token registration (requires physical device + Apple Dev account) |
+| 25 | Reminders schema + API | ✅ Done | `event_reminders` + `device_tokens` tables, reminder CRUD nested under events, device registration/upsert/unregister, events API returns reminders, 12 unit + 19 integration tests |
+| 26 | Reminder scheduler + APNs | ✅ Done | setInterval cron (60s), due-reminder SQL query, APNs HTTP/2 JWT client, push dispatch to assignees' iOS devices, `sentAt` tracking, stale token cleanup, 6 unit + 5 integration tests (mock APNs) |
+| 27 | iOS reminder UI | Not started | Reminder picker in EventFormView, device token registration on app launch |
 
 ## Phase 6: Future Enhancements (deferred)
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
+| — | Web Push notifications | Not started | Service Worker + Web Push API (add if users want desktop alerts) |
 | — | Admin UI | Not started | User management page — low priority for small family use |
 | — | iOS voice input | Not started | Speech framework mic button → parse endpoint (requires physical device) |
 | — | Cloud deploy | Not started | Docker Compose or Vercel + Fly.io |
@@ -64,7 +64,7 @@
 ## What's Working
 
 - Monorepo: `apps/api` (Hono, port 3001), `apps/web` (Next.js, port 3000), `apps/ios` (SwiftUI), `packages/shared`
-- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (70 unit tests + 98 integration tests; 13 Swift tests)
+- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (102 unit tests + 122 integration tests; 13 Swift tests)
 - Docker PostgreSQL: `scripts/db-start.sh` / `db-stop.sh` / `db-reset.sh`
 - Auth: signup, signin, signout, session check, admin plugin, bearer token plugin, `requireAuth` middleware (cookies + bearer)
 - Events CRUD: 5 endpoints with visibility rules, Zod validation, change logging, date range filtering
@@ -75,6 +75,10 @@
 - Event create/edit/delete: unified EventDialog with inline confirmation, change log history, multi-select assignee picker (checkbox list per member)
 - Smart input: `POST /api/events/parse` with LLM service, CalendarHeader text input, Haiku default + Gemma fallback
 - Event assignees: `event_assignees` join table with unique (eventId, userId) constraint, cascade deletes, existing events backfilled with owner as assignee; all CRUD endpoints return `assignees: [{ id, name, color }]`, create defaults owner as assignee, PATCH replaces assignees, changes logged in event history
+- Reminders: `event_reminders` table (eventId, minutesBefore) with unique constraint, CRUD at `/api/events/:id/reminders`, events API includes reminders in responses
+- Device tokens: `device_tokens` table (userId, platform, token) with upsert, `/api/devices` registration/unregistration, tokens persist beyond session expiry for push notifications
+- Reminder scheduler: setInterval cron (60s) checks for due reminders, sends push via APNs HTTP/2 JWT client, marks `sentAt` to prevent duplicates, cleans up stale device tokens on BadDeviceToken
+- APNs client: token-based JWT auth (ES256), HTTP/2 to api.push.apple.com, graceful skip when credentials not configured
 - LAN setup: Arch Linux (192.168.1.163) backend, Mac Air web frontend + iOS dev
 - Bearer auth: configurable CORS origins via `CORS_ORIGINS` env var
 - iOS app: Swift package (SPM, iOS 18+), actor-based APIClient with all endpoints (auth, events CRUD, members, parse), data models, SwiftLint config, test target
@@ -87,7 +91,7 @@
 
 ## What's Next
 
-Task 25: Reminders schema + API — `event_reminders` + `device_tokens` tables, CRUD endpoints, device registration.
+Task 27: iOS reminder UI — reminder picker in EventFormView, device token registration on app launch.
 
 ## Reference Docs
 
