@@ -50,13 +50,22 @@
 | 25 | Reminders schema + API | ✅ Done | `event_reminders` + `device_tokens` tables, reminder CRUD nested under events, device registration/upsert/unregister, events API returns reminders, 12 unit + 19 integration tests |
 | 26 | Reminder scheduler + APNs | ✅ Done | setInterval cron (60s), due-reminder SQL query, APNs HTTP/2 JWT client, push dispatch to assignees' iOS devices, `sentAt` tracking, stale token cleanup, 6 unit + 5 integration tests (mock APNs) |
 | 27 | iOS reminder UI | ✅ Done | Reminder preset toggles (15min/1hr/1day) in EventFormView, immediate API add/remove, pending reminders for new events, push notification permission request + AppDelegate device token registration |
+| 28 | Email notification backend | ✅ Done | Nodemailer + Gmail SMTP, `channel` column ("email"/"push") on event_reminders, scheduler dispatches by channel, email service with graceful skip, 4 unit + 6 integration tests |
+| 29 | Web reminder UI | ✅ Done | Email reminder preset buttons (15min/1hr/1day) in EventDialog, immediate API toggle for existing events, queued creation for new events, pre-populated on edit |
+| 30 | iOS reminder UI update | Not started | Add email channel option to reminder picker (multi-select: email, push, or both) |
 
-## Phase 6: Future Enhancements (deferred)
+## Phase 6: Admin UI
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
+| 31 | Admin web UI | Not started | User management page: list users, delete users (and their events/data), clean up test accounts. Better Auth admin APIs already exist. Admin-only access (first registered user = admin). |
+
+## Phase 7: Future Enhancements (deferred)
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| — | iOS push via APNs | Not started | Enable when Apple Developer account is available |
 | — | Web Push notifications | Not started | Service Worker + Web Push API (add if users want desktop alerts) |
-| — | Admin UI | Not started | User management page — low priority for small family use |
 | — | iOS voice input | Not started | Speech framework mic button → parse endpoint (requires physical device) |
 | — | Cloud deploy | Not started | Docker Compose or Vercel + Fly.io |
 | — | Recurring events | Not started | Repeat rules (daily/weekly/monthly) |
@@ -64,7 +73,7 @@
 ## What's Working
 
 - Monorepo: `apps/api` (Hono, port 3001), `apps/web` (Next.js, port 3000), `apps/ios` (SwiftUI), `packages/shared`
-- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (102 unit tests + 122 integration tests; 13 Swift tests)
+- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (112 unit tests + 123 integration tests; 13 Swift tests)
 - Docker PostgreSQL: `scripts/db-start.sh` / `db-stop.sh` / `db-reset.sh`
 - Auth: signup, signin, signout, session check, admin plugin, bearer token plugin, `requireAuth` middleware (cookies + bearer)
 - Events CRUD: 5 endpoints with visibility rules, Zod validation, change logging, date range filtering
@@ -72,12 +81,13 @@
 - Frontend: Tailwind v4 + shadcn/ui, login/register/home pages, auth redirect hook
 - Calendar month view: 42-cell grid (Mon start), event pills colored by first assignee, member filter sidebar (filters by assignee), prev/next nav
 - Calendar week view: 24-hour scrollable grid, month/week toggle, click-to-create, overlap handling, event blocks colored by first assignee
-- Event create/edit/delete: unified EventDialog with inline confirmation, change log history, multi-select assignee picker (checkbox list per member)
+- Event create/edit/delete: unified EventDialog with inline confirmation, change log history, multi-select assignee picker, email reminder presets (15min/1hr/1day toggle buttons)
 - Smart input: `POST /api/events/parse` with LLM service, CalendarHeader text input, Haiku default + Gemma fallback
 - Event assignees: `event_assignees` join table with unique (eventId, userId) constraint, cascade deletes, existing events backfilled with owner as assignee; all CRUD endpoints return `assignees: [{ id, name, color }]`, create defaults owner as assignee, PATCH replaces assignees, changes logged in event history
-- Reminders: `event_reminders` table (eventId, minutesBefore) with unique constraint, CRUD at `/api/events/:id/reminders`, events API includes reminders in responses
+- Reminders: `event_reminders` table (eventId, minutesBefore, channel) with unique constraint, CRUD at `/api/events/:id/reminders`, events API includes reminders with channel in responses
 - Device tokens: `device_tokens` table (userId, platform, token) with upsert, `/api/devices` registration/unregistration, tokens persist beyond session expiry for push notifications
-- Reminder scheduler: setInterval cron (60s) checks for due reminders, sends push via APNs HTTP/2 JWT client, marks `sentAt` to prevent duplicates, cleans up stale device tokens on BadDeviceToken
+- Reminder scheduler: setInterval cron (60s) checks for due reminders, dispatches by channel (email via Nodemailer/Gmail SMTP or push via APNs), marks `sentAt` to prevent duplicates, cleans up stale device tokens on BadDeviceToken
+- Email notifications: Nodemailer + Gmail SMTP (free tier 500/day), sends to assignees' email addresses, graceful skip when not configured
 - APNs client: token-based JWT auth (ES256), HTTP/2 to api.push.apple.com, graceful skip when credentials not configured
 - LAN setup: Arch Linux (192.168.1.163) backend, Mac Air web frontend + iOS dev
 - Bearer auth: configurable CORS origins via `CORS_ORIGINS` env var
@@ -92,7 +102,7 @@
 
 ## What's Next
 
-Phase 5 complete. Next: Phase 6 enhancements (deferred).
+Task 31: Admin web UI — user management page for cleaning up test accounts and managing family members.
 
 ## Reference Docs
 

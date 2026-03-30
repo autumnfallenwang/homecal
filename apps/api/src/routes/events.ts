@@ -147,7 +147,11 @@ eventsApp.get("/", async (c) => {
     return {
       ...rest,
       assignees: formatAssignees(rawAssignees),
-      reminders: rawReminders.map((r) => ({ id: r.id, minutesBefore: r.minutesBefore })),
+      reminders: rawReminders.map((r) => ({
+        id: r.id,
+        minutesBefore: r.minutesBefore,
+        channel: r.channel,
+      })),
     };
   });
 
@@ -177,7 +181,11 @@ eventsApp.get("/:id", async (c) => {
   return c.json({
     ...rest,
     assignees: formatAssignees(rawAssignees),
-    reminders: rawReminders.map((r) => ({ id: r.id, minutesBefore: r.minutesBefore })),
+    reminders: rawReminders.map((r) => ({
+      id: r.id,
+      minutesBefore: r.minutesBefore,
+      channel: r.channel,
+    })),
   });
 });
 

@@ -81,7 +81,7 @@ const privateEvent = {
 };
 
 describe("POST /api/events/:eventId/reminders", () => {
-  it("creates a reminder (201)", async () => {
+  it("creates an email reminder by default (201)", async () => {
     const alice = await createUser("Alice", "alice@test.com");
     const { body: event } = await createEvent(alice, sharedEvent);
 
@@ -94,7 +94,42 @@ describe("POST /api/events/:eventId/reminders", () => {
 
     expect(res.status).toBe(201);
     expect(body.minutesBefore).toBe(15);
+    expect(body.channel).toBe("email");
     expect(body.eventId).toBe(event.id);
+  });
+
+  it("creates a push reminder with explicit channel", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    const { body: event } = await createEvent(alice, sharedEvent);
+
+    const res = await req(`/api/events/${event.id}/reminders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: alice },
+      body: JSON.stringify({ minutesBefore: 15, channel: "push" }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(body.channel).toBe("push");
+  });
+
+  it("allows same minutesBefore with different channels", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    const { body: event } = await createEvent(alice, sharedEvent);
+
+    const res1 = await req(`/api/events/${event.id}/reminders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: alice },
+      body: JSON.stringify({ minutesBefore: 15, channel: "email" }),
+    });
+    expect(res1.status).toBe(201);
+
+    const res2 = await req(`/api/events/${event.id}/reminders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: alice },
+      body: JSON.stringify({ minutesBefore: 15, channel: "push" }),
+    });
+    expect(res2.status).toBe(201);
   });
 
   it("returns 409 for duplicate reminder", async () => {
@@ -181,6 +216,7 @@ describe("GET /api/events/:eventId/reminders", () => {
     expect(res.status).toBe(200);
     expect(body).toHaveLength(2);
     expect(body[0].minutesBefore).toBe(15);
+    expect(body[0].channel).toBe("email");
     expect(body[1].minutesBefore).toBe(60);
   });
 });

@@ -27,6 +27,30 @@ describe("createReminderSchema", () => {
   it("accepts exactly 10080", () => {
     expect(createReminderSchema.safeParse({ minutesBefore: 10080 }).success).toBe(true);
   });
+
+  it("defaults channel to email when omitted", () => {
+    const result = createReminderSchema.safeParse({ minutesBefore: 15 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.channel).toBe("email");
+    }
+  });
+
+  it("accepts channel email", () => {
+    const result = createReminderSchema.safeParse({ minutesBefore: 15, channel: "email" });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts channel push", () => {
+    const result = createReminderSchema.safeParse({ minutesBefore: 15, channel: "push" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid channel", () => {
+    expect(createReminderSchema.safeParse({ minutesBefore: 15, channel: "sms" }).success).toBe(
+      false,
+    );
+  });
 });
 
 describe("registerDeviceSchema", () => {

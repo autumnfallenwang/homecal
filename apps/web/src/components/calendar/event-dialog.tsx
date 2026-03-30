@@ -61,6 +61,7 @@ export function EventDialog({
   const [end, setEnd] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [reminderMinutes, setReminderMinutes] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -79,12 +80,19 @@ export function EventDialog({
     }
   }
 
+  const REMINDER_PRESETS = [
+    { minutes: 15, label: "15 min before" },
+    { minutes: 60, label: "1 hour before" },
+    { minutes: 1440, label: "1 day before" },
+  ];
+
   function resetForm() {
     setTitle("");
     setStart("");
     setEnd("");
     setIsPrivate(false);
     setAssigneeIds([]);
+    setReminderMinutes(new Set());
     setError(null);
     setSaving(false);
     setConfirmingDelete(false);
@@ -121,8 +129,48 @@ export function EventDialog({
       setEnd(isoToLocalDatetime(event.end));
       setIsPrivate(event.private);
       setAssigneeIds(event.assignees.map((a) => a.id));
+      setReminderMinutes(
+        new Set(event.reminders.filter((r) => r.channel === "email").map((r) => r.minutesBefore)),
+      );
     }
   }, [event]);
+
+  async function toggleReminder(minutes: number) {
+    const has = reminderMinutes.has(minutes);
+
+    if (isEdit && event) {
+      // Immediate API call for existing events
+      if (has) {
+        const reminder = event.reminders.find(
+          (r) => r.minutesBefore === minutes && r.channel === "email",
+        );
+        if (reminder) {
+          await fetch(`/api/events/${event.id}/reminders/${reminder.id}`, {
+            method: "DELETE",
+            credentials: "include",
+          });
+        }
+      } else {
+        await fetch(`/api/events/${event.id}/reminders`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ minutesBefore: minutes, channel: "email" }),
+        });
+      }
+      onSaved(); // refetch events to get updated reminders
+    }
+
+    setReminderMinutes((prev) => {
+      const next = new Set(prev);
+      if (has) {
+        next.delete(minutes);
+      } else {
+        next.add(minutes);
+      }
+      return next;
+    });
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -148,10 +196,23 @@ export function EventDialog({
         body: JSON.stringify(body),
       });
 
+      const responseData = await res.json().catch(() => null);
+
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
         const action = isEdit ? "update" : "create";
-        throw new Error(data?.error ?? `Failed to ${action} event (${res.status})`);
+        throw new Error(responseData?.error ?? `Failed to ${action} event (${res.status})`);
+      }
+
+      // Create reminders for newly created events
+      if (isCreate && reminderMinutes.size > 0 && responseData?.id) {
+        for (const minutes of reminderMinutes) {
+          await fetch(`/api/events/${responseData.id}/reminders`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ minutesBefore: minutes, channel: "email" }),
+          });
+        }
       }
 
       onSaved();
@@ -268,6 +329,23 @@ export function EventDialog({
               </div>
             </div>
           )}
+
+          <div className="flex flex-col gap-2">
+            <Label>Email Reminders</Label>
+            <div className="flex flex-wrap gap-2">
+              {REMINDER_PRESETS.map((preset) => (
+                <Button
+                  key={preset.minutes}
+                  type="button"
+                  variant={reminderMinutes.has(preset.minutes) ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => toggleReminder(preset.minutes)}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+          </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

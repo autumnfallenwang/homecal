@@ -130,12 +130,17 @@ export const eventReminders = pgTable(
       .notNull()
       .references(() => events.id, { onDelete: "cascade" }),
     minutesBefore: integer().notNull(),
+    channel: text().notNull().default("email"),
     sentAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("event_reminders_event_id_idx").on(table.eventId),
-    unique("event_reminders_event_minutes_unique").on(table.eventId, table.minutesBefore),
+    unique("event_reminders_event_minutes_channel_unique").on(
+      table.eventId,
+      table.minutesBefore,
+      table.channel,
+    ),
   ],
 );
 

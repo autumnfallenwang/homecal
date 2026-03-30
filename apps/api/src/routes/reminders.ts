@@ -38,6 +38,7 @@ remindersApp.get("/", async (c) => {
       id: eventReminders.id,
       eventId: eventReminders.eventId,
       minutesBefore: eventReminders.minutesBefore,
+      channel: eventReminders.channel,
       createdAt: eventReminders.createdAt,
     })
     .from(eventReminders)
@@ -61,13 +62,17 @@ remindersApp.post("/", async (c) => {
     return c.json({ error: "Validation failed", details: parsed.error.issues }, 400);
   }
 
-  // Check for duplicate
+  // Check for duplicate (same eventId + minutesBefore + channel)
   const existing = await db.query.eventReminders.findFirst({
     where: (r, { and, eq: eqFn }) =>
-      and(eqFn(r.eventId, eventId), eqFn(r.minutesBefore, parsed.data.minutesBefore)),
+      and(
+        eqFn(r.eventId, eventId),
+        eqFn(r.minutesBefore, parsed.data.minutesBefore),
+        eqFn(r.channel, parsed.data.channel),
+      ),
   });
   if (existing) {
-    return c.json({ error: "Reminder already exists for this interval" }, 409);
+    return c.json({ error: "Reminder already exists for this interval and channel" }, 409);
   }
 
   const [reminder] = await db
@@ -75,6 +80,7 @@ remindersApp.post("/", async (c) => {
     .values({
       eventId,
       minutesBefore: parsed.data.minutesBefore,
+      channel: parsed.data.channel,
     })
     .returning();
 

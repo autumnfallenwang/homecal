@@ -39,6 +39,7 @@ export const parsedEventSchema = z.object({
 // Reminders
 export const createReminderSchema = z.object({
   minutesBefore: z.number().int().positive().max(10080), // max 1 week
+  channel: z.enum(["email", "push"]).optional().default("email"),
 });
 
 // Device tokens

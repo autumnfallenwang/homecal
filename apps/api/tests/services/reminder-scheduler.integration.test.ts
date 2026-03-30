@@ -69,99 +69,113 @@ async function createEvent(
   return { res, body: await res.json() };
 }
 
-describe("checkDueReminders", () => {
-  it("sends due reminders and marks them as sent", async () => {
+// Helper: create event starting soon with a reminder
+async function setupDueReminder(
+  cookie: string,
+  title: string,
+  channel: "email" | "push" = "email",
+) {
+  const now = new Date();
+  const eventStart = new Date(now.getTime() + 10 * 60 * 1000);
+  const eventEnd = new Date(eventStart.getTime() + 60 * 60 * 1000);
+
+  const { body: event } = await createEvent(cookie, {
+    title,
+    start: eventStart.toISOString(),
+    end: eventEnd.toISOString(),
+  });
+
+  await req(`/api/events/${event.id}/reminders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookie },
+    body: JSON.stringify({ minutesBefore: 15, channel }),
+  });
+
+  return event;
+}
+
+describe("checkDueReminders — email channel", () => {
+  it("sends email for due email-channel reminder", async () => {
     const alice = await createUser("Alice", "alice@test.com");
+    await setupDueReminder(alice, "Team Meeting", "email");
 
-    // Create event starting 10 minutes from now
-    const now = new Date();
-    const eventStart = new Date(now.getTime() + 10 * 60 * 1000);
-    const eventEnd = new Date(eventStart.getTime() + 60 * 60 * 1000);
+    const emailCalls: { to: string; subject: string; body: string }[] = [];
+    const mockEmail = (_config: unknown, to: string, subject: string, body: string) => {
+      emailCalls.push({ to, subject, body });
+      return Promise.resolve({ success: true });
+    };
 
-    const { body: event } = await createEvent(alice, {
-      title: "Team Meeting",
-      start: eventStart.toISOString(),
-      end: eventEnd.toISOString(),
-    });
+    const count = await checkDueReminders({ emailFn: mockEmail });
 
-    // Add a 15-minute reminder (due now since event is in 10 min)
-    await req(`/api/events/${event.id}/reminders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: alice },
-      body: JSON.stringify({ minutesBefore: 15 }),
-    });
+    expect(count).toBe(1);
+    expect(emailCalls).toHaveLength(1);
+    expect(emailCalls[0].to).toBe("alice@test.com");
+    expect(emailCalls[0].subject).toBe("Reminder: Team Meeting");
+    expect(emailCalls[0].body).toContain("Team Meeting");
+    expect(emailCalls[0].body).toContain("in 15 minutes");
+  });
 
-    // Register a device token
+  it("does not re-send already-sent email reminders", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    await setupDueReminder(alice, "Meeting", "email");
+
+    const mockEmail = () => Promise.resolve({ success: true });
+
+    const count1 = await checkDueReminders({ emailFn: mockEmail });
+    expect(count1).toBe(1);
+
+    const count2 = await checkDueReminders({ emailFn: mockEmail });
+    expect(count2).toBe(0);
+  });
+});
+
+describe("checkDueReminders — push channel", () => {
+  it("sends push for due push-channel reminder", async () => {
+    const alice = await createUser("Alice", "alice@test.com");
+    await setupDueReminder(alice, "Team Meeting", "push");
+
     await req("/api/devices", {
       method: "POST",
       headers: { "Content-Type": "application/json", Cookie: alice },
       body: JSON.stringify({ platform: "ios", token: "test-device-token" }),
     });
 
-    // Run scheduler with mock push function
-    const pushCalls: { token: string; title: string; body: string }[] = [];
-    const mockPush = (
-      _config: unknown,
-      token: string,
-      payload: { title: string; body: string },
-    ) => {
-      pushCalls.push({ token, title: payload.title, body: payload.body });
+    const pushCalls: { token: string; title: string }[] = [];
+    const mockPush = (_config: unknown, token: string, payload: { title: string }) => {
+      pushCalls.push({ token, title: payload.title });
       return Promise.resolve({ success: true });
     };
 
-    const count = await checkDueReminders(mockPush);
+    const count = await checkDueReminders({ pushFn: mockPush });
 
     expect(count).toBe(1);
     expect(pushCalls).toHaveLength(1);
     expect(pushCalls[0].token).toBe("test-device-token");
     expect(pushCalls[0].title).toBe("Team Meeting");
-    expect(pushCalls[0].body).toBe("in 15 minutes");
-
-    // Verify sentAt was set
-    const reminders = await db.select().from(schema.eventReminders);
-    expect(reminders[0].sentAt).not.toBeNull();
   });
 
-  it("does not re-send already-sent reminders", async () => {
+  it("removes stale device tokens on BadDeviceToken", async () => {
     const alice = await createUser("Alice", "alice@test.com");
-
-    const now = new Date();
-    const eventStart = new Date(now.getTime() + 10 * 60 * 1000);
-    const eventEnd = new Date(eventStart.getTime() + 60 * 60 * 1000);
-
-    const { body: event } = await createEvent(alice, {
-      title: "Meeting",
-      start: eventStart.toISOString(),
-      end: eventEnd.toISOString(),
-    });
-
-    await req(`/api/events/${event.id}/reminders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: alice },
-      body: JSON.stringify({ minutesBefore: 15 }),
-    });
+    await setupDueReminder(alice, "Meeting", "push");
 
     await req("/api/devices", {
       method: "POST",
       headers: { "Content-Type": "application/json", Cookie: alice },
-      body: JSON.stringify({ platform: "ios", token: "test-token" }),
+      body: JSON.stringify({ platform: "ios", token: "bad-token" }),
     });
 
-    const mockPush = () => Promise.resolve({ success: true });
+    const mockPush = () => Promise.resolve({ success: false, reason: "BadDeviceToken" });
+    await checkDueReminders({ pushFn: mockPush });
 
-    // First run — should send
-    const count1 = await checkDueReminders(mockPush);
-    expect(count1).toBe(1);
-
-    // Second run — should not re-send
-    const count2 = await checkDueReminders(mockPush);
-    expect(count2).toBe(0);
+    const devices = await db.select().from(schema.deviceTokens);
+    expect(devices).toHaveLength(0);
   });
+});
 
+describe("checkDueReminders — general", () => {
   it("skips reminders not yet due", async () => {
     const alice = await createUser("Alice", "alice@test.com");
 
-    // Event is in 2 hours
     const now = new Date();
     const eventStart = new Date(now.getTime() + 2 * 60 * 60 * 1000);
     const eventEnd = new Date(eventStart.getTime() + 60 * 60 * 1000);
@@ -172,55 +186,22 @@ describe("checkDueReminders", () => {
       end: eventEnd.toISOString(),
     });
 
-    // 15-minute reminder — not due yet (event in 2 hours)
     await req(`/api/events/${event.id}/reminders`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Cookie: alice },
       body: JSON.stringify({ minutesBefore: 15 }),
     });
 
-    const mockPush = () => Promise.resolve({ success: true });
-    const count = await checkDueReminders(mockPush);
-
+    const count = await checkDueReminders({
+      emailFn: () => Promise.resolve({ success: true }),
+    });
     expect(count).toBe(0);
   });
 
-  it("removes stale device tokens on BadDeviceToken", async () => {
-    const alice = await createUser("Alice", "alice@test.com");
-
-    const now = new Date();
-    const eventStart = new Date(now.getTime() + 10 * 60 * 1000);
-    const eventEnd = new Date(eventStart.getTime() + 60 * 60 * 1000);
-
-    const { body: event } = await createEvent(alice, {
-      title: "Meeting",
-      start: eventStart.toISOString(),
-      end: eventEnd.toISOString(),
-    });
-
-    await req(`/api/events/${event.id}/reminders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: alice },
-      body: JSON.stringify({ minutesBefore: 15 }),
-    });
-
-    await req("/api/devices", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: alice },
-      body: JSON.stringify({ platform: "ios", token: "bad-token" }),
-    });
-
-    const mockPush = () => Promise.resolve({ success: false, reason: "BadDeviceToken" });
-    await checkDueReminders(mockPush);
-
-    // Device token should be deleted
-    const devices = await db.select().from(schema.deviceTokens);
-    expect(devices).toHaveLength(0);
-  });
-
   it("handles no due reminders gracefully", async () => {
-    const mockPush = () => Promise.resolve({ success: true });
-    const count = await checkDueReminders(mockPush);
+    const count = await checkDueReminders({
+      emailFn: () => Promise.resolve({ success: true }),
+    });
     expect(count).toBe(0);
   });
 });

@@ -1,7 +1,8 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { deviceTokens, eventAssignees, eventReminders, events } from "../db/schema.js";
+import { deviceTokens, eventAssignees, eventReminders, events, users } from "../db/schema.js";
 import { type ApnsConfig, getApnsConfig, type PushPayload, sendPush } from "./apns.js";
+import { type EmailConfig, getEmailConfig, sendReminderEmail } from "./email.js";
 
 export function formatReminderBody(minutesBefore: number): string {
   if (minutesBefore < 60) {
@@ -17,19 +18,28 @@ export function formatReminderBody(minutesBefore: number): string {
   return days === 1 ? "tomorrow" : `in ${days} days`;
 }
 
-export async function checkDueReminders(
+export interface DispatchFns {
   pushFn?: (
     config: ApnsConfig,
     token: string,
     payload: PushPayload,
-  ) => Promise<{ success: boolean; reason?: string }>,
-): Promise<number> {
+  ) => Promise<{ success: boolean; reason?: string }>;
+  emailFn?: (
+    config: EmailConfig,
+    to: string,
+    subject: string,
+    body: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+}
+
+export async function checkDueReminders(fns?: DispatchFns): Promise<number> {
   // Find reminders that are due and haven't been sent
   const dueReminders = await db
     .select({
       reminderId: eventReminders.id,
       eventId: eventReminders.eventId,
       minutesBefore: eventReminders.minutesBefore,
+      channel: eventReminders.channel,
       eventTitle: events.title,
       eventStart: events.start,
     })
@@ -38,7 +48,6 @@ export async function checkDueReminders(
     .where(
       and(
         isNull(eventReminders.sentAt),
-        // event.start - minutesBefore (in ms) <= now
         sql`${events.start} - (${eventReminders.minutesBefore} * interval '1 minute') <= now()`,
       ),
     );
@@ -46,7 +55,9 @@ export async function checkDueReminders(
   if (dueReminders.length === 0) return 0;
 
   const apnsConfig = getApnsConfig();
-  const send = pushFn ?? sendPush;
+  const emailConfig = getEmailConfig();
+  const push = fns?.pushFn ?? sendPush;
+  const email = fns?.emailFn ?? sendReminderEmail;
   let sentCount = 0;
 
   for (const reminder of dueReminders) {
@@ -57,7 +68,6 @@ export async function checkDueReminders(
       .where(eq(eventAssignees.eventId, reminder.eventId));
 
     if (assignees.length === 0) {
-      // No assignees — still mark as sent to avoid re-processing
       await db
         .update(eventReminders)
         .set({ sentAt: new Date() })
@@ -65,42 +75,68 @@ export async function checkDueReminders(
       continue;
     }
 
-    // Get device tokens for all assignees
     const assigneeIds = assignees.map((a) => a.userId);
-    const tokens = await db
-      .select({ id: deviceTokens.id, userId: deviceTokens.userId, token: deviceTokens.token })
-      .from(deviceTokens)
-      .where(
-        and(
-          sql`${deviceTokens.userId} IN (${sql.join(
+    const bodyText = formatReminderBody(reminder.minutesBefore);
+
+    if (reminder.channel === "email") {
+      // Get assignees' email addresses
+      const assigneeUsers = await db
+        .select({ email: users.email })
+        .from(users)
+        .where(
+          sql`${users.id} IN (${sql.join(
             assigneeIds.map((id) => sql`${id}`),
             sql`, `,
           )})`,
-          eq(deviceTokens.platform, "ios"),
-        ),
-      );
+        );
 
-    const payload: PushPayload = {
-      title: reminder.eventTitle,
-      body: formatReminderBody(reminder.minutesBefore),
-    };
-
-    // Send to each device
-    for (const device of tokens) {
-      if (!apnsConfig && !pushFn) {
-        console.warn("[reminder-scheduler] APNs not configured, skipping push");
-        continue;
+      for (const user of assigneeUsers) {
+        if (!emailConfig && !fns?.emailFn) {
+          console.warn("[reminder-scheduler] Email not configured, skipping");
+          continue;
+        }
+        const config = emailConfig as EmailConfig;
+        await email(
+          config,
+          user.email,
+          `Reminder: ${reminder.eventTitle}`,
+          `${reminder.eventTitle} — ${bodyText}`,
+        );
       }
+    } else if (reminder.channel === "push") {
+      // Get device tokens for all assignees
+      const tokens = await db
+        .select({ id: deviceTokens.id, token: deviceTokens.token })
+        .from(deviceTokens)
+        .where(
+          and(
+            sql`${deviceTokens.userId} IN (${sql.join(
+              assigneeIds.map((id) => sql`${id}`),
+              sql`, `,
+            )})`,
+            eq(deviceTokens.platform, "ios"),
+          ),
+        );
 
-      const config = apnsConfig as ApnsConfig;
-      const result = await send(config, device.token, payload);
+      const payload: PushPayload = {
+        title: reminder.eventTitle,
+        body: bodyText,
+      };
 
-      if (
-        !result.success &&
-        (result.reason === "BadDeviceToken" || result.reason === "Unregistered")
-      ) {
-        // Remove stale device token
-        await db.delete(deviceTokens).where(eq(deviceTokens.id, device.id));
+      for (const device of tokens) {
+        if (!apnsConfig && !fns?.pushFn) {
+          console.warn("[reminder-scheduler] APNs not configured, skipping push");
+          continue;
+        }
+        const config = apnsConfig as ApnsConfig;
+        const result = await push(config, device.token, payload);
+
+        if (
+          !result.success &&
+          (result.reason === "BadDeviceToken" || result.reason === "Unregistered")
+        ) {
+          await db.delete(deviceTokens).where(eq(deviceTokens.id, device.id));
+        }
       }
     }
 

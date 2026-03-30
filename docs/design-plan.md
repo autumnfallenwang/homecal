@@ -23,7 +23,7 @@ A smart family calendar app running on a local home network. Each family member 
 User            { id, name, color, passwordHash, createdAt }
 Event           { id, title, start, end, ownerId, private, createdAt, updatedAt }
 EventAssignee   { id, eventId, userId }
-EventReminder   { id, eventId, minutesBefore, createdAt }
+EventReminder   { id, eventId, minutesBefore, channel, sentAt, createdAt }
 EventLog        { id, eventId, userId, action, changes, timestamp }
 DeviceToken     { id, userId, platform, token, createdAt }
 ```
@@ -39,9 +39,17 @@ DeviceToken     { id, userId, platform, token, createdAt }
 ### Reminders
 - Each event can have **reminders** — time-based alerts before the event starts
 - Stored as `minutesBefore` (e.g., 15, 60, 1440 for 15min/1hr/1day)
-- Reminders notify **all assignees** on all their registered devices
-- Backend scheduler checks for due reminders and dispatches notifications
-- Notification channels: Web Push (browsers) + APNs (iOS devices)
+- Each reminder has a **channel**: `"email"` or `"push"`
+- `email`: sends to assignees' email addresses via Gmail SMTP (Nodemailer) — works for all users, free tier (500/day)
+- `push`: sends to assignees' iOS devices via APNs — requires Apple Developer account (future)
+- Backend scheduler checks for due reminders and dispatches via the appropriate channel
+- `sentAt` column tracks delivery to prevent duplicates
+- Same event can have multiple reminders with different channels (e.g., email 1hr before + push 15min before)
+
+### Notification Strategy
+- **Web app**: email is the only notification option (no push needed for desktop browser)
+- **iOS app**: can choose email, push, or both per reminder (push requires Apple Developer account)
+- **Email works for everyone**: users already have email in their profile, phone shows email notifications natively
 
 ## Core Rules
 
@@ -155,15 +163,22 @@ Adds the concept of "who is this event for" — separate from "who created it."
 23. Assignees web UI — multi-select member picker in EventDialog, filter sidebar filters by assignee
 24. Assignees iOS UI — multi-select member picker in EventFormView, filter by assignee
 
-### Phase 5 — Reminders + iOS Push Notifications
-Backend-driven reminders that notify assignees on their iOS devices. Web app is view/edit only — no push notifications (low value for a desktop browser when users have the iOS app in their pocket).
-25. Reminders schema + API — `event_reminders` table (eventId, minutesBefore), `device_tokens` table (userId, platform, token), CRUD endpoints for reminders and device registration
-26. Reminder scheduler + APNs — setInterval cron (every 60s), query due reminders (event.start - minutesBefore <= now, not yet sent), APNs client for push dispatch, `sentAt` column to prevent duplicates, mock-tested (real APNs requires Apple Developer certificate)
-27. iOS reminder UI — reminder picker in EventFormView (15min/1hr/1day before), device token registration on app launch
+### Phase 5 — Reminders + Notifications (current)
+Backend-driven reminders with email (primary) and push (future) notification channels. Email via Gmail SMTP (Nodemailer, free tier 500/day) works for all users. Push via APNs deferred until Apple Developer account available.
+25. Reminders schema + API — `event_reminders` table (eventId, minutesBefore, channel, sentAt), `device_tokens` table (userId, platform, token), CRUD endpoints for reminders and device registration
+26. Reminder scheduler + APNs — setInterval cron (60s), due-reminder query, APNs HTTP/2 JWT client, push dispatch, sentAt tracking, stale token cleanup
+27. iOS reminder UI — reminder preset toggles (15min/1hr/1day), device token registration on app launch
+28. Email notification backend — Nodemailer + Gmail SMTP service, `channel` column on `event_reminders` ("email" | "push"), scheduler dispatches email for email-channel reminders
+29. Web reminder UI — reminder picker in EventDialog (email only), preset options (15min/1hr/1day before)
+30. iOS reminder UI update — add email option to reminder picker (multi-select: email, push, or both)
 
-### Phase 6 — Future Enhancements (deferred)
+### Phase 6 — Admin UI
+User management for the admin (first registered user). Better Auth already provides admin APIs (`/api/auth/admin/*`).
+31. Admin web UI — user management page: list users, delete users (cascade removes their events/assignees/reminders/device tokens), clean up test accounts. Admin-only route, accessible from header menu.
+
+### Phase 7 — Future Enhancements (deferred)
+- iOS push via APNs — enable when Apple Developer account is available
 - Web Push notifications — Service Worker + Web Push API (add if users want desktop alerts)
 - iOS voice input — Speech framework mic button → parse endpoint (requires physical device)
-- Admin UI (user management — Better Auth admin APIs already exist)
 - Cloud deployment (Docker Compose / Vercel + Fly.io)
 - Recurring events — repeat rules (daily/weekly/monthly)

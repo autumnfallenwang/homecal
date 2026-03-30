@@ -12,6 +12,7 @@ export interface CalendarEvent {
   createdAt: string;
   updatedAt: string;
   assignees: { id: string; name: string; color: string }[];
+  reminders: { id: string; minutesBefore: number; channel: string }[];
 }
 
 export function useEvents(from: string, to: string) {
