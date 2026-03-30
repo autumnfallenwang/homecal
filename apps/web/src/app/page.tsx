@@ -204,6 +204,9 @@ export default function HomePage() {
         title={headerTitle}
         view={view}
         userName={session.user.name}
+        userEmail={session.user.email}
+        userColor={session.user.color}
+        userRole={session.user.role}
         onPrev={handlePrev}
         onNext={handleNext}
         onViewChange={handleViewChange}

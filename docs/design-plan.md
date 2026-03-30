@@ -173,8 +173,11 @@ Backend-driven reminders with email (primary) and push (future) notification cha
 30. iOS reminder UI update — add email option to reminder picker (multi-select: email, push, or both)
 
 ### Phase 6 — Admin UI
-User management for the admin (first registered user). Better Auth already provides admin APIs (`/api/auth/admin/*`).
-31. Admin web UI — user management page: list users, delete users (cascade removes their events/assignees/reminders/device tokens), clean up test accounts. Admin-only route, accessible from header menu.
+Full user management for the admin (first registered user). Better Auth admin plugin provides all APIs — no custom backend needed.
+31. Admin web UI — basic user table with delete, admin-only `/admin` page, settings icon in header
+32. Admin — search + create user — search/filter users in table, admin creates family member accounts directly with name/email/password/color (no self-registration needed)
+33. Admin — ban/unban + set role — temporarily disable accounts (with reason and optional expiry), promote/demote users to admin role
+34. Admin — reset password + sessions — reset a user's password, view all active sessions per user (device/IP/last active), force logout specific devices or revoke all sessions
 
 ### Phase 7 — Future Enhancements (deferred)
 - iOS push via APNs — enable when Apple Developer account is available

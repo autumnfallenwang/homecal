@@ -58,7 +58,10 @@
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 31 | Admin web UI | Not started | User management page: list users, delete users (and their events/data), clean up test accounts. Better Auth admin APIs already exist. Admin-only access (first registered user = admin). |
+| 31 | Admin web UI — basic | ✅ Done | `/admin` page with user table, delete with confirmation, admin-only access, settings icon in header |
+| 32 | Admin — search + create user | ✅ Done | Search by name/email (case-insensitive), create user modal (name/email/password/color/role/status) |
+| 33 | Admin — edit user modal | ✅ Done | Unified edit modal: name, email, color, password reset, role toggle (user/admin), status toggle (active/inactive), all via Better Auth admin APIs |
+| 34 | Admin — reset password + sessions | ✅ Done | Password reset in edit modal (leave blank to keep current), activate/deactivate (ban/unban) in edit modal. Sessions management deferred. |
 
 ## Phase 7: Future Enhancements (deferred)
 
@@ -99,10 +102,12 @@
 - iOS change log: Activity section in edit sheet with field-level diffs (title/date/visibility changes), user color dots, relative timestamps ("5m ago")
 - iOS smart input: Text field with sparkles button in calendar header, calls `POST /api/events/parse`, pre-fills event form with parsed title/start/end (local-time-aware ISO parsing)
 - iOS reminders: Reminder preset toggles (15min/1hr/1day before) in EventFormView, immediate API calls for existing events, pending queue for new events, push notification permission on launch, AppDelegate device token forwarding to backend
+- Admin UI: `/admin` page (shield icon, admin only) with user table (color dot, name, email, role badge, status badge, created), search by name/email (case-insensitive), current user pinned first. Create modal (name/email/password/color/role/status). Edit modal (name/email/color/password reset/role toggle/status toggle). Delete with confirmation (pencil + trash icons).
+- User settings: gear icon for all users opens settings modal (email, color, password), auto-reloads page on save
 
 ## What's Next
 
-Task 31: Admin web UI — user management page for cleaning up test accounts and managing family members.
+Phase 6 (Admin UI) complete. Remaining: task 30 (iOS reminder email channel), then Phase 7 (deferred).
 
 ## Reference Docs
 

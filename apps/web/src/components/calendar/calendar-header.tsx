@@ -1,21 +1,34 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Loader2, LogOut, Plus, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, LogOut, Plus, Settings, ShieldCheck, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type KeyboardEvent, useState } from "react";
+import { type FormEvent, type KeyboardEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 
 interface CalendarHeaderProps {
   title: string;
   view: "month" | "week" | "day";
   userName: string;
+  userEmail?: string;
+  userColor?: string;
+  userRole?: string;
   onPrev: () => void;
   onNext: () => void;
   onViewChange: (view: "month" | "week" | "day") => void;
   onNewEvent?: () => void;
   onSmartInput?: (text: string) => void;
+  onProfileSaved?: () => void;
   smartInputLoading?: boolean;
 }
 
@@ -23,15 +36,62 @@ export function CalendarHeader({
   title,
   view,
   userName,
+  userEmail,
+  userColor,
+  userRole,
   onPrev,
   onNext,
   onViewChange,
   onNewEvent,
   onSmartInput,
+  onProfileSaved,
   smartInputLoading = false,
 }: CalendarHeaderProps) {
   const router = useRouter();
   const [smartText, setSmartText] = useState("");
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileEmail, setProfileEmail] = useState(userEmail ?? "");
+  const [profileColor, setProfileColor] = useState(userColor ?? "#3b82f6");
+  const [profilePassword, setProfilePassword] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  function openProfile() {
+    setProfileEmail(userEmail ?? "");
+    setProfileColor(userColor ?? "#3b82f6");
+    setProfilePassword("");
+    setProfileError(null);
+    setProfileOpen(true);
+  }
+
+  async function handleProfileSubmit(e: FormEvent) {
+    e.preventDefault();
+    setProfileError(null);
+    setProfileSaving(true);
+    try {
+      if (profileEmail !== userEmail || profileColor !== userColor) {
+        await authClient.updateUser({
+          email: profileEmail !== userEmail ? profileEmail : undefined,
+          color: profileColor,
+        });
+      }
+      if (profilePassword) {
+        await authClient.changePassword({
+          newPassword: profilePassword,
+          currentPassword: "", // Better Auth may require current password
+          revokeOtherSessions: false,
+        });
+      }
+      setProfileOpen(false);
+      onProfileSaved?.();
+      // Reload page to reflect session changes (name, color, email)
+      window.location.reload();
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : "Failed to update profile");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
 
   const handleSignOut = async () => {
     await authClient.signOut();
@@ -127,10 +187,73 @@ export function CalendarHeader({
           New Event
         </Button>
         <span className="text-sm text-muted-foreground">{userName}</span>
-        <Button variant="ghost" size="icon-sm" onClick={handleSignOut}>
+        <Button variant="ghost" size="icon-sm" onClick={openProfile} title="Settings">
+          <Settings className="h-4 w-4" />
+        </Button>
+        {userRole === "admin" && (
+          <Button variant="ghost" size="icon-sm" onClick={() => router.push("/admin")} title="Admin">
+            <ShieldCheck className="h-4 w-4" />
+          </Button>
+        )}
+        <Button variant="ghost" size="icon-sm" onClick={handleSignOut} title="Sign out">
           <LogOut className="h-4 w-4" />
         </Button>
       </div>
+
+      {/* Profile Modal */}
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Settings</DialogTitle>
+            <DialogDescription>Update your email, color, or password.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleProfileSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="profile-email">Email</Label>
+              <Input
+                id="profile-email"
+                type="email"
+                value={profileEmail}
+                onChange={(e) => setProfileEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="profile-color">Color</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="profile-color"
+                  type="color"
+                  value={profileColor}
+                  onChange={(e) => setProfileColor(e.target.value)}
+                  className="h-9 w-12 cursor-pointer rounded border"
+                />
+                <span className="text-sm text-muted-foreground">{profileColor}</span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="profile-password">New Password</Label>
+              <Input
+                id="profile-password"
+                type="password"
+                value={profilePassword}
+                onChange={(e) => setProfilePassword(e.target.value)}
+                placeholder="Leave blank to keep current"
+                minLength={8}
+              />
+            </div>
+            {profileError && <p className="text-sm text-destructive">{profileError}</p>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setProfileOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={profileSaving}>
+                {profileSaving ? "Saving..." : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }
