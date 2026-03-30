@@ -24,6 +24,8 @@ struct EventFormView: View {
     @State private var logs: [EventLogEntry] = []
     @State private var showLogs = false
     @State private var selectedAssigneeIds: Set<String> = []
+    @State private var reminders: [EventReminder] = []
+    @State private var pendingReminderMinutes: Set<Int> = []
 
     private var isEditMode: Bool { eventId != nil }
 
@@ -40,6 +42,8 @@ struct EventFormView: View {
                 if !members.isEmpty {
                     assigneesSection
                 }
+
+                remindersSection
 
                 if let errorMessage {
                     Section {
@@ -168,6 +172,14 @@ struct EventFormView: View {
         }
     }
 
+    // MARK: - Reminder Presets
+
+    private static let reminderPresets: [(Int, String)] = [
+        (15, "15 minutes before"),
+        (60, "1 hour before"),
+        (1440, "1 day before"),
+    ]
+
     // MARK: - Subviews
 
     private var assigneesSection: some View {
@@ -202,6 +214,63 @@ struct EventFormView: View {
         .buttonStyle(.plain)
     }
 
+    private var remindersSection: some View {
+        Section("Reminders") {
+            ForEach(Self.reminderPresets, id: \.0) { (minutes: Int, label: String) in
+                reminderRow(minutes: minutes, label: label)
+            }
+        }
+    }
+
+    private func reminderRow(minutes: Int, label: String) -> some View {
+        let isActive = reminders.contains { $0.minutesBefore == minutes }
+            || pendingReminderMinutes.contains(minutes)
+        return Button {
+            Task { await toggleReminder(minutes: minutes) }
+        } label: {
+            HStack {
+                Image(systemName: "bell")
+                    .foregroundStyle(isActive ? Color.accentColor : .secondary)
+                Text(label)
+                    .foregroundStyle(.primary)
+                Spacer()
+                if isActive {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func toggleReminder(minutes: Int) async {
+        if let existing = reminders.first(where: { $0.minutesBefore == minutes }) {
+            // Remove
+            guard let eventId else { return }
+            do {
+                try await apiClient.deleteReminder(eventId: eventId, reminderId: existing.id)
+                reminders.removeAll { $0.id == existing.id }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        } else if let eventId {
+            // Add to existing event
+            do {
+                let reminder = try await apiClient.addReminder(eventId: eventId, minutesBefore: minutes)
+                reminders.append(reminder)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        } else {
+            // New event not yet saved — queue for after save
+            if pendingReminderMinutes.contains(minutes) {
+                pendingReminderMinutes.remove(minutes)
+            } else {
+                pendingReminderMinutes.insert(minutes)
+            }
+        }
+    }
+
     // MARK: - Actions
 
     private func loadEvent(id: String) async {
@@ -215,6 +284,7 @@ struct EventFormView: View {
             endDate = event.end
             isPrivate = event.isPrivate
             selectedAssigneeIds = Set(event.assignees.map(\.id))
+            reminders = event.reminders
         } catch {
             errorMessage = error.localizedDescription
             return
@@ -258,7 +328,11 @@ struct EventFormView: View {
                     isPrivate: isPrivate,
                     assigneeIds: Array(selectedAssigneeIds)
                 )
-                _ = try await apiClient.createEvent(input)
+                let created = try await apiClient.createEvent(input)
+                // Add pending reminders to the newly created event
+                for minutes in pendingReminderMinutes {
+                    _ = try await apiClient.addReminder(eventId: created.id, minutesBefore: minutes)
+                }
             }
             onSave()
             dismiss()

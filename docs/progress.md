@@ -49,7 +49,7 @@
 |---|------|--------|-------|
 | 25 | Reminders schema + API | ✅ Done | `event_reminders` + `device_tokens` tables, reminder CRUD nested under events, device registration/upsert/unregister, events API returns reminders, 12 unit + 19 integration tests |
 | 26 | Reminder scheduler + APNs | ✅ Done | setInterval cron (60s), due-reminder SQL query, APNs HTTP/2 JWT client, push dispatch to assignees' iOS devices, `sentAt` tracking, stale token cleanup, 6 unit + 5 integration tests (mock APNs) |
-| 27 | iOS reminder UI | Not started | Reminder picker in EventFormView, device token registration on app launch |
+| 27 | iOS reminder UI | ✅ Done | Reminder preset toggles (15min/1hr/1day) in EventFormView, immediate API add/remove, pending reminders for new events, push notification permission request + AppDelegate device token registration |
 
 ## Phase 6: Future Enhancements (deferred)
 
@@ -88,10 +88,11 @@
 - iOS assignees: CalendarEvent model includes assignees array, event pills/blocks colored by first assignee, member filter filters by assignee, create defaults current user as assignee
 - iOS change log: Activity section in edit sheet with field-level diffs (title/date/visibility changes), user color dots, relative timestamps ("5m ago")
 - iOS smart input: Text field with sparkles button in calendar header, calls `POST /api/events/parse`, pre-fills event form with parsed title/start/end (local-time-aware ISO parsing)
+- iOS reminders: Reminder preset toggles (15min/1hr/1day before) in EventFormView, immediate API calls for existing events, pending queue for new events, push notification permission on launch, AppDelegate device token forwarding to backend
 
 ## What's Next
 
-Task 27: iOS reminder UI — reminder picker in EventFormView, device token registration on app launch.
+Phase 5 complete. Next: Phase 6 enhancements (deferred).
 
 ## Reference Docs
 

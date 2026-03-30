@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 public struct HomeView: View {
     @Environment(AuthManager.self) private var authManager
@@ -156,6 +157,7 @@ public struct HomeView: View {
             .task {
                 viewModel.configure(apiClient: authManager.apiClient)
                 await viewModel.loadData()
+                await requestPushNotifications()
             }
             .onChange(of: viewModel.currentDate) {
                 Task { await viewModel.loadData() }
@@ -172,6 +174,19 @@ public struct HomeView: View {
         Task {
             await viewModel.parseSmartInput(trimmed)
             smartInputText = ""
+        }
+    }
+
+    private func requestPushNotifications() async {
+        let center = UNUserNotificationCenter.current()
+        do {
+            let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+            guard granted else { return }
+            await MainActor.run {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
+        } catch {
+            print("Push notification permission error: \(error)")
         }
     }
 

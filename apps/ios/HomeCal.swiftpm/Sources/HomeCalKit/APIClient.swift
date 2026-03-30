@@ -200,6 +200,31 @@ public actor APIClient {
         try await request(method: "GET", path: "/api/events/\(eventId)/logs")
     }
 
+    // MARK: - Reminders
+
+    public func addReminder(eventId: String, minutesBefore: Int) async throws -> EventReminder {
+        struct Body: Encodable { let minutesBefore: Int }
+        return try await request(
+            method: "POST",
+            path: "/api/events/\(eventId)/reminders",
+            body: Body(minutesBefore: minutesBefore)
+        )
+    }
+
+    public func deleteReminder(eventId: String, reminderId: String) async throws {
+        try await requestNoContent(
+            method: "DELETE",
+            path: "/api/events/\(eventId)/reminders/\(reminderId)"
+        )
+    }
+
+    // MARK: - Devices
+
+    public func registerDevice(_ input: RegisterDeviceInput) async throws {
+        struct Response: Decodable { let id: String }
+        let _: Response = try await request(method: "POST", path: "/api/devices", body: input)
+    }
+
     // MARK: - Members
 
     public func fetchMembers() async throws -> [Member] {
