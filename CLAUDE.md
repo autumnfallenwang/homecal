@@ -8,10 +8,11 @@ Turborepo + pnpm | Hono + Zod (API) | Next.js App Router (Web) | Swift + SwiftUI
 
 ## Structure
 
-- `apps/api/` — Hono backend API (port 3001)
-- `apps/web/` — Next.js frontend (port 3000)
+- `apps/api/` — Hono backend API (dev: 3001, prod: 51001)
+- `apps/web/` — Next.js frontend (dev: 3000, prod: 51000)
 - `apps/ios/` — SwiftUI iOS app (Swift Package Manager)
 - `packages/shared/` — shared Zod schemas and types
+- `deploy/` — Docker deployment (compose, Dockerfiles, CLI script)
 - `docs/` — design docs
 
 ## Commands
@@ -44,6 +45,25 @@ All commands run from the repo root via Turborepo:
 - **Completing a feature** (`/dev-task`, pre-merge validation): use `pnpm test` (full suite)
 - **Debugging a specific test**: use `pnpm --filter @homecal/api exec vitest run tests/<file>`
 - **iOS tasks**: `/check swift` or `/test swift` to run only Swift checks
+
+### Production (Docker)
+
+- `homecal start` — build + start all containers
+- `homecal stop` — stop all containers
+- `homecal restart` — quick restart (no rebuild)
+- `homecal rebuild` — force rebuild + restart
+- `homecal update` — git pull + rebuild + migrate (deploy new code)
+- `homecal logs` — follow logs
+- `homecal status` — show container status
+
+Prod ports: Web 51000, API 51001, DB 51432. Config in `deploy/.env.production` (not committed).
+
+### Dev vs Prod
+
+- **Dev**: feature branches, `pnpm dev`, dev DB on port 5432, hot reload
+- **Prod**: main branch, Docker containers, prod DB on port 51432, isolated data
+- **Deploy**: merge to main → `homecal update` (pulls + builds + migrates + restarts)
+- **Migrations**: schema-only (additive) — never delete/rename columns
 
 ## Docs
 
