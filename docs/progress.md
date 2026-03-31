@@ -63,14 +63,19 @@
 | 33 | Admin — edit user modal | ✅ Done | Unified edit modal: name, email, color, password reset, role toggle (user/admin), status toggle (active/inactive), all via Better Auth admin APIs |
 | 34 | Admin — reset password + sessions | ✅ Done | Password reset in edit modal (leave blank to keep current), activate/deactivate (ban/unban) in edit modal. Sessions management deferred. |
 
-## Phase 7: Future Enhancements (deferred)
+## Phase 7: Production Deployment
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 35 | Docker deployment setup | ✅ Done | Dockerfiles (API + Web), compose.yaml (DB + API + Web on ports 51000/51001/51432), `.env.production`, `homecal` CLI (start/stop/restart/logs/status/rebuild/migrate/deploy), all 3 containers verified running |
+
+## Phase 8: Future Enhancements (deferred)
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
 | — | iOS push via APNs | Not started | Enable when Apple Developer account is available |
 | — | Web Push notifications | Not started | Service Worker + Web Push API (add if users want desktop alerts) |
 | — | iOS voice input | Not started | Speech framework mic button → parse endpoint (requires physical device) |
-| — | Cloud deploy | Not started | Docker Compose or Vercel + Fly.io |
 | — | Recurring events | Not started | Repeat rules (daily/weekly/monthly) |
 
 ## What's Working
@@ -107,7 +112,7 @@
 
 ## What's Next
 
-Phase 6 (Admin UI) complete. Remaining: task 30 (iOS reminder email channel), then Phase 7 (deferred).
+Phase 7 (Production Deployment) complete. All services running on Docker (ports 51000/51001/51432).
 
 ## Reference Docs
 

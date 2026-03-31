@@ -115,10 +115,40 @@ DeviceToken     { id, userId, platform, token, createdAt }
 
 ## Deployment
 
-- **Backend**: Arch Linux desktop — Hono API (port 3001) + PostgreSQL + llm-gateway, bound to `0.0.0.0` for LAN access
-- **Web**: Next.js on same machine (port 3000), accessible from any browser on LAN
-- **iOS**: Swift app on iPhones, connects to backend via LAN IP (e.g. `http://192.168.x.x:3001`)
-- **Future cloud**: Docker Compose or split (Vercel + Fly.io + managed PostgreSQL)
+### Production (Docker)
+All prod services run in Docker containers on Arch Linux desktop, managed by a single `homecal` CLI script (following the llm-gateway pattern).
+
+| Service | Container | Port |
+|---|---|---|
+| PostgreSQL (prod) | `homecal-db-prod` | 51432 |
+| Hono API | `homecal-api` | 51001 |
+| Next.js Web | `homecal-web` | 51000 |
+
+- **Docker Compose**: `deploy/compose.yaml` — all 3 services, `restart: unless-stopped`
+- **Dockerfiles**: `deploy/Dockerfile.api` + `deploy/Dockerfile.web` — monorepo-aware builds
+- **CLI**: `deploy/homecal` — start/stop/restart/logs/status/rebuild/deploy
+- **Env**: `deploy/.env.production` — prod DB URL, auth secret, email creds (not committed)
+- **Deploy flow**: `homecal deploy` → git pull main → build containers → run migrations → restart
+- **iOS**: connects to API via LAN IP (e.g. `http://192.168.x.x:51001`)
+
+### Development
+Dev runs locally with hot reload, separate from prod.
+
+| Service | How | Port |
+|---|---|---|
+| PostgreSQL (dev) | Docker container `homecal-postgres` | 5432 |
+| Hono API | `pnpm dev` (tsx watch) | 3001 |
+| Next.js Web | `pnpm dev` (next dev) | 3000 |
+
+- **Branch**: feature branches, merged to `main` via PR
+- **DB**: Dev database with test data, freely resettable
+- **Env**: `apps/api/.env` — dev DB URL, dev secrets
+- **Workflow**: code on feature branch → test → PR → merge to main → `homecal deploy` updates prod
+
+### Dev/Prod Isolation
+- **Databases**: Completely separate — dev on port 5432, prod on port 51432. Different data, same schema.
+- **Migrations**: Schema-only (`drizzle-kit push`) — adds tables/columns, never touches data.
+- **Ports**: No conflicts — dev (3000/3001/5432) and prod (51000/51001/51432) can run simultaneously.
 
 ## iOS Development Workflow
 
@@ -179,9 +209,12 @@ Full user management for the admin (first registered user). Better Auth admin pl
 33. Admin — ban/unban + set role — temporarily disable accounts (with reason and optional expiry), promote/demote users to admin role
 34. Admin — reset password + sessions — reset a user's password, view all active sessions per user (device/IP/last active), force logout specific devices or revoke all sessions
 
-### Phase 7 — Future Enhancements (deferred)
+### Phase 7 — Production Deployment (current)
+Docker-based prod deployment on Arch Linux, following the llm-gateway pattern.
+35. Docker deployment setup — Dockerfiles (API + Web), compose.yaml (DB + API + Web), `.env.production`, `homecal` CLI script (start/stop/restart/logs/status/rebuild/deploy), prod ports (51000/51001/51432)
+
+### Phase 8 — Future Enhancements (deferred)
 - iOS push via APNs — enable when Apple Developer account is available
 - Web Push notifications — Service Worker + Web Push API (add if users want desktop alerts)
 - iOS voice input — Speech framework mic button → parse endpoint (requires physical device)
-- Cloud deployment (Docker Compose / Vercel + Fly.io)
 - Recurring events — repeat rules (daily/weekly/monthly)

@@ -1,6 +1,15 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Loader2, LogOut, Plus, Settings, ShieldCheck, Sparkles } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  LogOut,
+  Plus,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, type KeyboardEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -69,16 +78,16 @@ export function CalendarHeader({
     setProfileError(null);
     setProfileSaving(true);
     try {
-      if (profileEmail !== userEmail || profileColor !== userColor) {
-        await authClient.updateUser({
-          email: profileEmail !== userEmail ? profileEmail : undefined,
-          color: profileColor,
-        });
+      if (profileColor !== userColor) {
+        await authClient.updateUser({ color: profileColor });
+      }
+      if (profileEmail !== userEmail) {
+        await authClient.changeEmail({ newEmail: profileEmail });
       }
       if (profilePassword) {
         await authClient.changePassword({
           newPassword: profilePassword,
-          currentPassword: "", // Better Auth may require current password
+          currentPassword: "",
           revokeOtherSessions: false,
         });
       }
@@ -191,7 +200,12 @@ export function CalendarHeader({
           <Settings className="h-4 w-4" />
         </Button>
         {userRole === "admin" && (
-          <Button variant="ghost" size="icon-sm" onClick={() => router.push("/admin")} title="Admin">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => router.push("/admin")}
+            title="Admin"
+          >
             <ShieldCheck className="h-4 w-4" />
           </Button>
         )}

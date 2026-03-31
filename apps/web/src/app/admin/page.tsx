@@ -1,5 +1,6 @@
 "use client";
 
+import { Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Pencil, Trash2 } from "lucide-react";
 import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 import { authClient } from "@/lib/auth-client";
 
@@ -44,7 +44,7 @@ export default function AdminPage() {
   const [formEmail, setFormEmail] = useState("");
   const [formPassword, setFormPassword] = useState("");
   const [formColor, setFormColor] = useState("#3b82f6");
-  const [formRole, setFormRole] = useState("user");
+  const [formRole, setFormRole] = useState<"user" | "admin">("user");
   const [formActive, setFormActive] = useState(true);
   const [formSaving, setFormSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -89,7 +89,7 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (isAdmin) fetchUsers();
+    if (isAdmin) void fetchUsers();
   }, [isAdmin, fetchUsers]);
 
   const users = (
@@ -125,7 +125,7 @@ export default function AdminPage() {
     setFormEmail(user.email);
     setFormPassword("");
     setFormColor(user.color);
-    setFormRole(user.role);
+    setFormRole(user.role === "admin" ? "admin" : "user");
     setFormActive(!user.banned);
     setFormError(null);
   }
@@ -186,7 +186,7 @@ export default function AdminPage() {
 
         // Update password if provided
         if (formPassword) {
-          await authClient.admin.setPassword({
+          await authClient.admin.setUserPassword({
             userId: editUserId,
             newPassword: formPassword,
           });
@@ -194,7 +194,7 @@ export default function AdminPage() {
       }
 
       closeModal();
-      fetchUsers();
+      void fetchUsers();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -207,7 +207,7 @@ export default function AdminPage() {
     try {
       await authClient.admin.removeUser({ userId });
       setConfirmingId(null);
-      fetchUsers();
+      void fetchUsers();
     } catch {
       setError("Failed to delete user");
     }
@@ -303,9 +303,8 @@ export default function AdminPage() {
                         {new Date(user.createdAt).toLocaleDateString()}
                       </td>
                       <td className="px-4 py-2 text-right">
-                        {isSelf ? (
-                          <span className="text-xs text-muted-foreground">You</span>
-                        ) : confirmingId === user.id ? (
+                        {isSelf && <span className="text-xs text-muted-foreground">You</span>}
+                        {!isSelf && confirmingId === user.id && (
                           <div className="flex items-center justify-end gap-2">
                             <span className="text-xs text-muted-foreground">Delete?</span>
                             <Button
@@ -323,9 +322,15 @@ export default function AdminPage() {
                               No
                             </Button>
                           </div>
-                        ) : (
+                        )}
+                        {!isSelf && confirmingId !== user.id && (
                           <div className="flex items-center justify-end gap-1">
-                            <Button variant="ghost" size="icon-sm" onClick={() => openEdit(user)} title="Edit">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => openEdit(user)}
+                              title="Edit"
+                            >
                               <Pencil className="h-4 w-4" />
                             </Button>
                             <Button
@@ -493,7 +498,9 @@ export default function AdminPage() {
                 Cancel
               </Button>
               <Button type="submit" disabled={formSaving}>
-                {formSaving ? "Saving..." : modalMode === "create" ? "Create" : "Save Changes"}
+                {formSaving && "Saving..."}
+                {!formSaving && modalMode === "create" && "Create"}
+                {!formSaving && modalMode === "edit" && "Save Changes"}
               </Button>
             </DialogFooter>
           </form>
