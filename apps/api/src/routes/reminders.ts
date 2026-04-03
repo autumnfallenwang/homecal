@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import type { auth } from "../auth.js";
 import { db } from "../db/index.js";
-import { eventReminders, events } from "../db/schema.js";
+import { eventLogs, eventReminders, events } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 
 type Session = typeof auth.$Infer.Session;
@@ -84,6 +84,21 @@ remindersApp.post("/", async (c) => {
     })
     .returning();
 
+  // Log for shared events
+  if (!event.private) {
+    await db.insert(eventLogs).values({
+      eventId,
+      userId,
+      action: "updated",
+      changes: {
+        reminder: {
+          from: null,
+          to: `${parsed.data.channel} ${parsed.data.minutesBefore}min before`,
+        },
+      },
+    });
+  }
+
   return c.json(reminder, 201);
 });
 
@@ -102,6 +117,21 @@ remindersApp.delete("/:reminderId", async (c) => {
   if (!reminder) return c.json({ error: "Not found" }, 404);
 
   await db.delete(eventReminders).where(eq(eventReminders.id, reminderId));
+
+  // Log for shared events
+  if (!event.private) {
+    await db.insert(eventLogs).values({
+      eventId,
+      userId,
+      action: "updated",
+      changes: {
+        reminder: {
+          from: `${reminder.channel} ${reminder.minutesBefore}min before`,
+          to: null,
+        },
+      },
+    });
+  }
 
   return c.json({ success: true });
 });

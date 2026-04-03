@@ -135,35 +135,10 @@ export function EventDialog({
     }
   }, [event]);
 
-  async function toggleReminder(minutes: number) {
-    const has = reminderMinutes.has(minutes);
-
-    if (isEdit && event) {
-      // Immediate API call for existing events
-      if (has) {
-        const reminder = event.reminders.find(
-          (r) => r.minutesBefore === minutes && r.channel === "email",
-        );
-        if (reminder) {
-          await fetch(`/api/events/${event.id}/reminders/${reminder.id}`, {
-            method: "DELETE",
-            credentials: "include",
-          });
-        }
-      } else {
-        await fetch(`/api/events/${event.id}/reminders`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ minutesBefore: minutes, channel: "email" }),
-        });
-      }
-      onSaved(); // refetch events to get updated reminders
-    }
-
+  function toggleReminder(minutes: number) {
     setReminderMinutes((prev) => {
       const next = new Set(prev);
-      if (has) {
+      if (next.has(minutes)) {
         next.delete(minutes);
       } else {
         next.add(minutes);
@@ -203,15 +178,33 @@ export function EventDialog({
         throw new Error(responseData?.error ?? `Failed to ${action} event (${res.status})`);
       }
 
-      // Create reminders for newly created events
-      if (isCreate && reminderMinutes.size > 0 && responseData?.id) {
+      // Sync reminders
+      const eventId = isEdit ? event.id : responseData?.id;
+      if (eventId) {
+        const originalMinutes = new Set(
+          event?.reminders.filter((r) => r.channel === "email").map((r) => r.minutesBefore) ?? [],
+        );
+
+        // Remove reminders that were unchecked
+        for (const r of event?.reminders ?? []) {
+          if (r.channel === "email" && !reminderMinutes.has(r.minutesBefore)) {
+            await fetch(`/api/events/${eventId}/reminders/${r.id}`, {
+              method: "DELETE",
+              credentials: "include",
+            });
+          }
+        }
+
+        // Add reminders that were checked
         for (const minutes of reminderMinutes) {
-          await fetch(`/api/events/${responseData.id}/reminders`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ minutesBefore: minutes, channel: "email" }),
-          });
+          if (!originalMinutes.has(minutes)) {
+            await fetch(`/api/events/${eventId}/reminders`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ minutesBefore: minutes, channel: "email" }),
+            });
+          }
         }
       }
 
@@ -281,7 +274,19 @@ export function EventDialog({
                 id="event-start"
                 type="datetime-local"
                 value={start}
-                onChange={(e) => setStart(e.target.value)}
+                onChange={(e) => {
+                  const newStart = e.target.value;
+                  setStart(newStart);
+                  // Auto-set end to start + 30 min
+                  if (newStart) {
+                    const startDate = new Date(newStart);
+                    const newEnd = new Date(startDate.getTime() + 30 * 60 * 1000);
+                    const pad = (n: number) => n.toString().padStart(2, "0");
+                    setEnd(
+                      `${newEnd.getFullYear()}-${pad(newEnd.getMonth() + 1)}-${pad(newEnd.getDate())}T${pad(newEnd.getHours())}:${pad(newEnd.getMinutes())}`,
+                    );
+                  }
+                }}
                 required
               />
             </div>
@@ -290,6 +295,7 @@ export function EventDialog({
               <Input
                 id="event-end"
                 type="datetime-local"
+                min={start}
                 value={end}
                 onChange={(e) => setEnd(e.target.value)}
                 required
