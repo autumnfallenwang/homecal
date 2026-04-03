@@ -143,6 +143,8 @@ describe("schema", () => {
         expect.arrayContaining([
           "id",
           "title",
+          "location",
+          "description",
           "start",
           "end",
           "ownerId",

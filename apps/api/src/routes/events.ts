@@ -80,6 +80,8 @@ eventsApp.post("/", async (c) => {
     .insert(events)
     .values({
       title: data.title,
+      location: data.location ?? null,
+      description: data.description ?? null,
       start: new Date(data.start),
       end: new Date(data.end),
       private: data.private,
@@ -260,6 +262,14 @@ eventsApp.patch("/:id", async (c) => {
   if (data.title !== undefined && data.title !== existing.title) {
     updateValues.title = data.title;
     changes.title = { from: existing.title, to: data.title };
+  }
+  if (data.location !== undefined && data.location !== (existing.location ?? undefined)) {
+    updateValues.location = data.location ?? null;
+    changes.location = { from: existing.location, to: data.location ?? null };
+  }
+  if (data.description !== undefined && data.description !== (existing.description ?? undefined)) {
+    updateValues.description = data.description ?? null;
+    changes.description = { from: existing.description, to: data.description ?? null };
   }
   if (data.start !== undefined) {
     const newStart = new Date(data.start);

@@ -72,6 +72,8 @@ export const events = pgTable(
   {
     id: uuid().primaryKey().defaultRandom(),
     title: text().notNull(),
+    location: text(),
+    description: text(),
     start: timestamp({ withTimezone: true }).notNull(),
     end: timestamp({ withTimezone: true }).notNull(),
     ownerId: uuid()

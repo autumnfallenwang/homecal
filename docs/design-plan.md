@@ -21,7 +21,7 @@ A smart family calendar app running on a local home network. Each family member 
 
 ```
 User            { id, name, color, passwordHash, createdAt }
-Event           { id, title, start, end, ownerId, private, createdAt, updatedAt }
+Event           { id, title, location, description, start, end, ownerId, private, createdAt, updatedAt }
 EventAssignee   { id, eventId, userId }
 EventReminder   { id, eventId, minutesBefore, channel, sentAt, createdAt }
 EventLog        { id, eventId, userId, action, changes, timestamp }
@@ -213,7 +213,11 @@ Full user management for the admin (first registered user). Better Auth admin pl
 Docker-based prod deployment on Arch Linux, following the llm-gateway pattern.
 35. Docker deployment setup — Dockerfiles (API + Web), compose.yaml (DB + API + Web), `.env.production`, `homecal` CLI script (start/stop/restart/logs/status/rebuild/deploy), prod ports (51000/51001/51432)
 
-### Phase 8 — Future Enhancements (deferred)
+### Phase 8 — Event Details (current)
+Add richer event fields beyond just title + time.
+36. Add location + description fields — two optional text columns on events table, update Zod schemas (create/update), include in API responses, add inputs to web EventDialog, track changes in event log
+
+### Phase 9 — Future Enhancements (deferred)
 - iOS push via APNs — enable when Apple Developer account is available
 - Web Push notifications — Service Worker + Web Push API (add if users want desktop alerts)
 - iOS voice input — Speech framework mic button → parse endpoint (requires physical device)

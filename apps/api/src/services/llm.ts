@@ -12,6 +12,8 @@ export function buildParsePrompt(today: string, memberNames: string[]): string {
 
 Parse the user's natural language input into a calendar event. Return ONLY a JSON object with these fields:
 - "title": string — the event title
+- "location": string — where the event takes place (empty string if not mentioned)
+- "description": string — additional details or notes (empty string if not mentioned)
 - "start": string — ISO 8601 datetime (e.g. "2026-03-10T14:00:00Z")
 - "end": string — ISO 8601 datetime
 - "assignees": string[] — names of family members this event is for (empty array if none mentioned)
@@ -22,6 +24,8 @@ Rules:
 - Resolve relative days like "next Tuesday", "tomorrow", "this Friday" relative to today.
 - For assignees, only include names that match family members listed above. If the input mentions "everyone" or "family", include all members.
 - If no person is mentioned, return an empty assignees array.
+- Extract location from phrases like "at ...", "in ...", "@..." etc. If no location mentioned, use empty string.
+- Extract any extra details into description. If none, use empty string.
 - Return ONLY the JSON object, no explanation or markdown.`;
 }
 
@@ -56,7 +60,14 @@ function resolveAssigneeIds(
 export function parseLlmResponse(
   raw: string,
   memberNameToId?: Map<string, string>,
-): { title: string; start: string; end: string; assigneeIds: string[] } {
+): {
+  title: string;
+  location: string;
+  description: string;
+  start: string;
+  end: string;
+  assigneeIds: string[];
+} {
   // Strip markdown code fences if present
   let cleaned = raw.trim();
   cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "");
@@ -93,7 +104,14 @@ export function parseLlmResponse(
 
   const assigneeIds = resolveAssigneeIds(result.data.assignees, memberNameToId);
 
-  return { title: result.data.title, start, end, assigneeIds };
+  return {
+    title: result.data.title,
+    location: result.data.location,
+    description: result.data.description,
+    start,
+    end,
+    assigneeIds,
+  };
 }
 
 export async function callLlm(

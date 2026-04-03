@@ -36,6 +36,13 @@
       "when": 1774882559903,
       "tag": "0004_harsh_vargas",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775246966328,
+      "tag": "0005_yielding_vulcan",
+      "breakpoints": true
     }
   ]
 }

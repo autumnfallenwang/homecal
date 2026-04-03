@@ -69,7 +69,13 @@
 |---|------|--------|-------|
 | 35 | Docker deployment setup | ✅ Done | Dockerfiles (API + Web), compose.yaml (DB + API + Web on ports 51000/51001/51432), `.env.production`, `homecal` CLI (start/stop/restart/logs/status/rebuild/migrate/deploy), all 3 containers verified running |
 
-## Phase 8: Future Enhancements (deferred)
+## Phase 8: Event Details
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 36 | Add location + description fields | ✅ Done | Two optional text columns, DB migration, Zod schemas (create/update), API includes in create/update/responses with change logging, web EventDialog inputs (location text + description textarea) |
+
+## Phase 9: Future Enhancements (deferred)
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
@@ -112,7 +118,7 @@
 
 ## What's Next
 
-Phase 7 (Production Deployment) complete. All services running on Docker (ports 51000/51001/51432).
+Phase 8 (Event Details) complete.
 
 ## Reference Docs
 

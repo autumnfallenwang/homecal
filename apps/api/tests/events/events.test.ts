@@ -114,6 +114,28 @@ describe("createEventSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("accepts optional location and description", () => {
+    const result = createEventSchema.safeParse({
+      ...validEvent,
+      location: "Main St Clinic",
+      description: "Annual checkup",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.location).toBe("Main St Clinic");
+      expect(result.data.description).toBe("Annual checkup");
+    }
+  });
+
+  it("accepts missing location and description", () => {
+    const result = createEventSchema.safeParse(validEvent);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.location).toBeUndefined();
+      expect(result.data.description).toBeUndefined();
+    }
+  });
 });
 
 describe("updateEventSchema", () => {

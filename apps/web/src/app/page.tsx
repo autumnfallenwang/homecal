@@ -162,6 +162,8 @@ export default function HomePage() {
       const data = await res.json();
       setParsedEvent({
         title: data.title,
+        location: data.location,
+        description: data.description,
         start: data.start,
         end: data.end,
         assigneeIds: data.assigneeIds,

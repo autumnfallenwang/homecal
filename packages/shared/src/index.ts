@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export const createEventSchema = z.object({
   title: z.string().min(1).max(200),
+  location: z.string().max(500).optional(),
+  description: z.string().max(2000).optional(),
   start: z.iso.datetime(),
   end: z.iso.datetime(),
   private: z.boolean().optional().default(false),
@@ -11,6 +13,8 @@ export const createEventSchema = z.object({
 export const updateEventSchema = z
   .object({
     title: z.string().min(1).max(200).optional(),
+    location: z.string().max(500).optional(),
+    description: z.string().max(2000).optional(),
     start: z.iso.datetime().optional(),
     end: z.iso.datetime().optional(),
     private: z.boolean().optional(),
@@ -31,6 +35,8 @@ export const parseEventInputSchema = z.object({
 
 export const parsedEventSchema = z.object({
   title: z.string().min(1).max(200),
+  location: z.string().optional().default(""),
+  description: z.string().optional().default(""),
   start: z.iso.datetime(),
   end: z.iso.datetime(),
   assignees: z.array(z.string()).optional().default([]),

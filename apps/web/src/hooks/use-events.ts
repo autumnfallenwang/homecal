@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 export interface CalendarEvent {
   id: string;
   title: string;
+  location: string | null;
+  description: string | null;
   start: string;
   end: string;
   ownerId: string;

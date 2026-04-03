@@ -67,6 +67,8 @@ describe("buildParsePrompt", () => {
     const prompt = buildParsePrompt("2026-03-09", []);
     expect(prompt).toContain("JSON");
     expect(prompt).toContain("title");
+    expect(prompt).toContain("location");
+    expect(prompt).toContain("description");
     expect(prompt).toContain("start");
     expect(prompt).toContain("end");
     expect(prompt).toContain("assignees");
@@ -202,16 +204,29 @@ describe("parseLlmResponse", () => {
       title: "Dentist",
       start: "2026-03-10T14:00:00Z",
       end: "2026-03-10T15:00:00Z",
-      location: "123 Main St",
+      priority: "high",
     });
     const result = parseLlmResponse(withExtra);
-    expect(result).toEqual({
+    expect("priority" in result).toBe(false);
+  });
+
+  it("extracts location and description", () => {
+    const json = JSON.stringify({
       title: "Dentist",
+      location: "Main St Clinic",
+      description: "Annual checkup",
       start: "2026-03-10T14:00:00Z",
       end: "2026-03-10T15:00:00Z",
-      assigneeIds: [],
     });
-    expect("location" in result).toBe(false);
+    const result = parseLlmResponse(json);
+    expect(result.location).toBe("Main St Clinic");
+    expect(result.description).toBe("Annual checkup");
+  });
+
+  it("defaults location and description to empty string", () => {
+    const result = parseLlmResponse(validJson);
+    expect(result.location).toBe("");
+    expect(result.description).toBe("");
   });
 
   it("maps assignee names to IDs", () => {

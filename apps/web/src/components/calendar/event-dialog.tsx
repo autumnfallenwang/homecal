@@ -21,6 +21,8 @@ import type { Member } from "@/hooks/use-members";
 
 export interface ParsedEvent {
   title: string;
+  location?: string;
+  description?: string;
   start: string;
   end: string;
   assigneeIds?: string[];
@@ -57,6 +59,8 @@ export function EventDialog({
   onSaved,
 }: EventDialogProps) {
   const [title, setTitle] = useState("");
+  const [location, setLocation] = useState("");
+  const [description, setDescription] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
@@ -88,6 +92,8 @@ export function EventDialog({
 
   function resetForm() {
     setTitle("");
+    setLocation("");
+    setDescription("");
     setStart("");
     setEnd("");
     setIsPrivate(false);
@@ -103,6 +109,8 @@ export function EventDialog({
   useEffect(() => {
     if (parsedEvent && date && !event) {
       setTitle(parsedEvent.title);
+      setLocation(parsedEvent.location ?? "");
+      setDescription(parsedEvent.description ?? "");
       setStart(parsedEvent.start.slice(0, 16));
       setEnd(parsedEvent.end.slice(0, 16));
       if (parsedEvent.assigneeIds?.length) {
@@ -125,6 +133,8 @@ export function EventDialog({
   useEffect(() => {
     if (event) {
       setTitle(event.title);
+      setLocation(event.location ?? "");
+      setDescription(event.description ?? "");
       setStart(isoToLocalDatetime(event.start));
       setEnd(isoToLocalDatetime(event.end));
       setIsPrivate(event.private);
@@ -155,6 +165,8 @@ export function EventDialog({
     try {
       const body = {
         title,
+        location: location || undefined,
+        description: description || undefined,
         start: new Date(start).toISOString(),
         end: new Date(end).toISOString(),
         private: isPrivate,
@@ -267,6 +279,16 @@ export function EventDialog({
             />
           </div>
 
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="event-location">Location</Label>
+            <Input
+              id="event-location"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="event-start">Start</Label>
@@ -301,6 +323,18 @@ export function EventDialog({
                 required
               />
             </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="event-description">Description</Label>
+            <textarea
+              id="event-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional"
+              rows={2}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
           </div>
 
           <div className="flex items-center gap-2">
