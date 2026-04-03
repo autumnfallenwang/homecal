@@ -21,7 +21,7 @@ A smart family calendar app running on a local home network. Each family member 
 
 ```
 User            { id, name, color, passwordHash, createdAt }
-Event           { id, title, location, description, start, end, ownerId, private, createdAt, updatedAt }
+Event           { id, title, location, description, start, end, ownerId, private, seriesId, createdAt, updatedAt }
 EventAssignee   { id, eventId, userId }
 EventReminder   { id, eventId, minutesBefore, channel, sentAt, createdAt }
 EventLog        { id, eventId, userId, action, changes, timestamp }
@@ -45,6 +45,18 @@ DeviceToken     { id, userId, platform, token, createdAt }
 - Backend scheduler checks for due reminders and dispatches via the appropriate channel
 - `sentAt` column tracks delivery to prevent duplicates
 - Same event can have multiple reminders with different channels (e.g., email 1hr before + push 15min before)
+
+### Series Events
+- Events can be **single** (`seriesId = null`) or part of a **series** (`seriesId = shared UUID`)
+- Series are created via a batch creator: date range + time + repeat pattern → generates N individual events
+- Repeat patterns: every X days, every X weeks (with weekday toggles), every X months (with day picker)
+- All events in a series share the same `seriesId`, title, location, description, assignees, reminders
+- **Create**: Single/Series toggle in EventDialog. Series shows date range, time, repeat pattern. Preview step shows all events before confirming.
+- **Edit single**: normal edit dialog
+- **Edit series**: opens series edit, save updates ALL events in the series (`PATCH /api/events/series/:seriesId`)
+- **Delete single**: deletes just that event
+- **Delete series event**: two options — "Delete This Event" (removes one) or "Delete Entire Series" (removes all via `DELETE /api/events/series/:seriesId`)
+- **Visual**: series events show a repeat icon (🔁) on calendar pills/blocks
 
 ### Notification Strategy
 - **Web app**: email is the only notification option (no push needed for desktop browser)
@@ -217,8 +229,13 @@ Docker-based prod deployment on Arch Linux, following the llm-gateway pattern.
 Add richer event fields beyond just title + time.
 36. Add location + description fields — two optional text columns on events table, update Zod schemas (create/update), include in API responses, add inputs to web EventDialog, track changes in event log
 
-### Phase 9 — Future Enhancements (deferred)
+### Phase 9 — Series Events (current)
+Batch event creation with repeat patterns and series management.
+37. Series schema + API — `seriesId` column (nullable UUID) on events, `PATCH /api/events/series/:seriesId` (bulk update), `DELETE /api/events/series/:seriesId` (bulk delete)
+38. Series web UI — Single/Series toggle in EventDialog, series form (date range, time, repeat pattern with days/weeks/months modes), preview step with confirm, repeat icon on calendar pills
+39. Series edit/delete — series edit mode (updates all), delete options ("Delete This Event" / "Delete Entire Series")
+
+### Phase 10 — Future Enhancements (deferred)
 - iOS push via APNs — enable when Apple Developer account is available
 - Web Push notifications — Service Worker + Web Push API (add if users want desktop alerts)
 - iOS voice input — Speech framework mic button → parse endpoint (requires physical device)
-- Recurring events — repeat rules (daily/weekly/monthly)

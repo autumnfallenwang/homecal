@@ -75,14 +75,21 @@
 |---|------|--------|-------|
 | 36 | Add location + description fields | ✅ Done | Two optional text columns, DB migration, Zod schemas (create/update), API includes in create/update/responses with change logging, web EventDialog inputs (location text + description textarea) |
 
-## Phase 9: Future Enhancements (deferred)
+## Phase 9: Series Events
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 37 | Series schema + API | Not started | `seriesId` column (nullable UUID) on events, bulk update `PATCH /api/events/series/:seriesId`, bulk delete `DELETE /api/events/series/:seriesId` |
+| 38 | Series web UI | Not started | Single/Series toggle, series form (date range, time, repeat pattern: days/weeks/months), preview step with confirm, repeat icon on pills |
+| 39 | Series edit/delete | Not started | Series edit mode (updates all events), delete options ("Delete This Event" / "Delete Entire Series") |
+
+## Phase 10: Future Enhancements (deferred)
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
 | — | iOS push via APNs | Not started | Enable when Apple Developer account is available |
 | — | Web Push notifications | Not started | Service Worker + Web Push API (add if users want desktop alerts) |
 | — | iOS voice input | Not started | Speech framework mic button → parse endpoint (requires physical device) |
-| — | Recurring events | Not started | Repeat rules (daily/weekly/monthly) |
 
 ## What's Working
 
@@ -118,7 +125,7 @@
 
 ## What's Next
 
-Phase 8 (Event Details) complete.
+Task 37: Series schema + API — seriesId column, bulk update/delete endpoints.
 
 ## Reference Docs
 
