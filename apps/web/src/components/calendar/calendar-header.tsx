@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, type KeyboardEvent, useState } from "react";
+import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -59,6 +60,7 @@ export function CalendarHeader({
   smartInputLoading = false,
 }: CalendarHeaderProps) {
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
   const [smartText, setSmartText] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileEmail, setProfileEmail] = useState(userEmail ?? "");
@@ -67,12 +69,21 @@ export function CalendarHeader({
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
+  const [profileTheme, setProfileTheme] = useState(theme);
+
   function openProfile() {
     setProfileEmail(userEmail ?? "");
     setProfileColor(userColor ?? "#3b82f6");
     setProfilePassword("");
+    setProfileTheme(theme);
     setProfileError(null);
     setProfileOpen(true);
+  }
+
+  function handleProfileClose() {
+    // Revert theme preview if not saved
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    setProfileOpen(false);
   }
 
   async function handleProfileSubmit(e: FormEvent) {
@@ -93,10 +104,14 @@ export function CalendarHeader({
           revokeOtherSessions: false,
         });
       }
+      // Persist theme
+      setTheme(profileTheme);
       setProfileOpen(false);
       onProfileSaved?.();
       // Reload page to reflect session changes (name, color, email)
-      window.location.reload();
+      if (profileColor !== userColor || profileEmail !== userEmail || profilePassword) {
+        window.location.reload();
+      }
     } catch (err) {
       setProfileError(err instanceof Error ? err.message : "Failed to update profile");
     } finally {
@@ -260,7 +275,12 @@ export function CalendarHeader({
       </div>
 
       {/* Profile Modal */}
-      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+      <Dialog
+        open={profileOpen}
+        onOpenChange={(open) => {
+          if (!open) handleProfileClose();
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Settings</DialogTitle>
@@ -301,9 +321,38 @@ export function CalendarHeader({
                 minLength={8}
               />
             </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Theme</Label>
+              <div className="flex items-center rounded-md border w-fit">
+                <Button
+                  type="button"
+                  variant={profileTheme === "light" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="rounded-r-none"
+                  onClick={() => {
+                    setProfileTheme("light");
+                    document.documentElement.classList.remove("dark");
+                  }}
+                >
+                  Light
+                </Button>
+                <Button
+                  type="button"
+                  variant={profileTheme === "dark" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="rounded-l-none"
+                  onClick={() => {
+                    setProfileTheme("dark");
+                    document.documentElement.classList.add("dark");
+                  }}
+                >
+                  Dark
+                </Button>
+              </div>
+            </div>
             {profileError && <p className="text-sm text-destructive">{profileError}</p>}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setProfileOpen(false)}>
+              <Button type="button" variant="outline" onClick={handleProfileClose}>
                 Cancel
               </Button>
               <Button type="submit" disabled={profileSaving}>
