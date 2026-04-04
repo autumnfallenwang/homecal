@@ -5,6 +5,8 @@ import {
   ChevronRight,
   Loader2,
   LogOut,
+  Mic,
+  MicOff,
   Plus,
   Settings,
   ShieldCheck,
@@ -121,6 +123,41 @@ export function CalendarHeader({
     }
   }
 
+  const [listening, setListening] = useState(false);
+
+  function handleVoiceInput() {
+    const SpeechRecognition =
+      (window as unknown as { webkitSpeechRecognition?: typeof window.SpeechRecognition })
+        .webkitSpeechRecognition ?? window.SpeechRecognition;
+    if (!SpeechRecognition) {
+      setSmartText("Voice input not supported in this browser");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => setListening(false);
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const transcript = event.results[0][0].transcript;
+      setSmartText(transcript);
+      // Auto-submit to LLM
+      if (transcript.trim() && onSmartInput) {
+        onSmartInput(transcript.trim());
+        setSmartText("");
+      }
+    };
+
+    recognition.onerror = () => {
+      setListening(false);
+    };
+
+    recognition.start();
+  }
+
   return (
     <header className="flex items-center justify-between border-b px-4 py-2">
       {/* Left: logo + view toggle + nav */}
@@ -186,6 +223,15 @@ export function CalendarHeader({
           ) : (
             <Sparkles className="h-4 w-4" />
           )}
+        </Button>
+        <Button
+          variant={listening ? "default" : "outline"}
+          size="icon-sm"
+          onClick={handleVoiceInput}
+          disabled={smartInputLoading || listening}
+          title={listening ? "Listening..." : "Voice input"}
+        >
+          {listening ? <MicOff className="h-4 w-4 animate-pulse" /> : <Mic className="h-4 w-4" />}
         </Button>
       </div>
 

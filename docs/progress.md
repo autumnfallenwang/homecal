@@ -90,7 +90,7 @@
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 43 | Web voice input | Not started | Mic button in CalendarHeader using Chrome Web Speech API, speech-to-text → feeds into existing smart input pipeline → LLM parse → pre-fill event form |
+| 43 | Web voice input | ✅ Done | Mic button in CalendarHeader, Chrome Web Speech API, auto-submits transcript to LLM parse, listening indicator (pulsing mic icon), falls back gracefully on unsupported browsers |
 
 ## Phase 11: Future Enhancements (deferred)
 
@@ -134,7 +134,7 @@
 
 ## What's Next
 
-Task 43: Web voice input — mic button using Chrome Web Speech API.
+Phase 10 (Web Voice Input) complete.
 
 ## Reference Docs
 
