@@ -7,6 +7,7 @@ import {
   eventLogs,
   eventReminders,
   events,
+  series,
   sessions,
   users,
   verifications,
@@ -24,6 +25,7 @@ describe("schema", () => {
       expect(getTableName(eventAssignees)).toBe("event_assignees");
       expect(getTableName(eventReminders)).toBe("event_reminders");
       expect(getTableName(deviceTokens)).toBe("device_tokens");
+      expect(getTableName(series)).toBe("series");
     });
   });
 
@@ -148,6 +150,7 @@ describe("schema", () => {
           "start",
           "end",
           "ownerId",
+          "seriesId",
           "private",
           "createdAt",
           "updatedAt",
@@ -218,6 +221,32 @@ describe("schema", () => {
     it("has all required columns", () => {
       expect(Object.keys(columns)).toEqual(
         expect.arrayContaining(["id", "userId", "platform", "token", "createdAt", "updatedAt"]),
+      );
+    });
+
+    it("has uuid primary key with default", () => {
+      expect(columns.id.dataType).toBe("string");
+      expect(columns.id.hasDefault).toBe(true);
+    });
+  });
+
+  describe("series table", () => {
+    const columns = getTableColumns(series);
+
+    it("has all required columns", () => {
+      expect(Object.keys(columns)).toEqual(
+        expect.arrayContaining([
+          "id",
+          "startDate",
+          "endDate",
+          "startTime",
+          "endTime",
+          "repeatEvery",
+          "repeatUnit",
+          "weekDays",
+          "monthDay",
+          "createdAt",
+        ]),
       );
     });
 

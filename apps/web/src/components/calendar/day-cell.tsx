@@ -53,6 +53,7 @@ export function DayCell({
               key={event.id}
               title={event.title}
               color={color}
+              isSeries={!!event.seriesId}
               onClick={(e) => {
                 e.stopPropagation();
                 onEventClick?.(event.id);

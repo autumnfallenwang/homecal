@@ -11,6 +11,7 @@ export interface CalendarEvent {
   end: string;
   ownerId: string;
   private: boolean;
+  seriesId: string | null;
   createdAt: string;
   updatedAt: string;
   assignees: { id: string; name: string; color: string }[];

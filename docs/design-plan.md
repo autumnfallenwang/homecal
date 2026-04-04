@@ -22,6 +22,7 @@ A smart family calendar app running on a local home network. Each family member 
 ```
 User            { id, name, color, passwordHash, createdAt }
 Event           { id, title, location, description, start, end, ownerId, private, seriesId, createdAt, updatedAt }
+Series          { id, startDate, endDate, startTime, endTime, repeatEvery, repeatUnit, weekDays, monthDay, createdAt }
 EventAssignee   { id, eventId, userId }
 EventReminder   { id, eventId, minutesBefore, channel, sentAt, createdAt }
 EventLog        { id, eventId, userId, action, changes, timestamp }
@@ -51,12 +52,12 @@ DeviceToken     { id, userId, platform, token, createdAt }
 - Series are created via a batch creator: date range + time + repeat pattern → generates N individual events
 - Repeat patterns: every X days, every X weeks (with weekday toggles), every X months (with day picker)
 - All events in a series share the same `seriesId`, title, location, description, assignees, reminders
+- **`series` table**: Stores the repeat config (startDate, endDate, startTime, endTime, repeatEvery, repeatUnit, weekDays, monthDay). Events reference it via `seriesId → series.id`. Lightweight reference table — events stay self-contained, series table just stores the recipe for reconstructing the form on edit.
 - **Create**: Single/Series toggle in EventDialog. Series shows date range, time, repeat pattern. Preview step shows all events before confirming.
-- **Edit single**: normal edit dialog
-- **Edit series**: opens series edit, save updates ALL events in the series (`PATCH /api/events/series/:seriesId`)
+- **Edit**: clicking a series event shows choice: "Edit this event" (normal single edit) or "Edit entire series" (reopens full series form pre-populated with seriesConfig, preview regenerated events, confirm = delete old + create new with same seriesId)
 - **Delete single**: deletes just that event
 - **Delete series event**: two options — "Delete This Event" (removes one) or "Delete Entire Series" (removes all via `DELETE /api/events/series/:seriesId`)
-- **Visual**: series events show a repeat icon (🔁) on calendar pills/blocks
+- **Visual**: series events show a repeat icon (↻) on calendar pills/blocks
 
 ### Notification Strategy
 - **Web app**: email is the only notification option (no push needed for desktop browser)
@@ -233,9 +234,16 @@ Add richer event fields beyond just title + time.
 Batch event creation with repeat patterns and series management.
 37. Series schema + API — `seriesId` column (nullable UUID) on events, `PATCH /api/events/series/:seriesId` (bulk update), `DELETE /api/events/series/:seriesId` (bulk delete)
 38. Series web UI — Single/Series toggle in EventDialog, series form (date range, time, repeat pattern with days/weeks/months modes), preview step with confirm, repeat icon on calendar pills
-39. Series edit/delete — series edit mode (updates all), delete options ("Delete This Event" / "Delete Entire Series")
+39. Series edit/delete — basic series edit (shared fields bulk update), delete options ("Delete This Event" / "Delete Entire Series")
+40. Series table + API — new `series` table (id, startDate, endDate, startTime, endTime, repeatEvery, repeatUnit, weekDays, monthDay, createdAt). Update `events.seriesId` to FK → `series.id`. API: create series record alongside batch events, return series config in event responses, GET /api/series/:id endpoint.
+41. Series full edit UI — clicking a series event shows "Edit this event" vs "Edit entire series" choice. "Edit this event" = normal single edit. "Edit entire series" = loads series config from API, reopens full series form pre-populated, preview regenerated events, confirm = delete old events + create new events referencing same series record (updated config).
+42. Series single event edit — editing one occurrence = normal single edit, changes only that event.
 
-### Phase 10 — Future Enhancements (deferred)
+### Phase 10 — Web Voice Input (current)
+Voice input for the web calendar using Chrome's built-in Web Speech API. No backend changes — speech-to-text in the browser feeds into the existing LLM smart input pipeline.
+43. Web voice input — mic button next to smart input sparkles button in CalendarHeader. Click → Chrome captures mic → speech-to-text via Google servers → transcript fed to `onSmartInput(text)` → LLM parse → pre-fill event form. Listening indicator while recording. Chrome/Edge only.
+
+### Phase 11 — Future Enhancements (deferred)
 - iOS push via APNs — enable when Apple Developer account is available
 - Web Push notifications — Service Worker + Web Push API (add if users want desktop alerts)
 - iOS voice input — Speech framework mic button → parse endpoint (requires physical device)

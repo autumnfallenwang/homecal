@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { useEventLogs } from "@/hooks/use-event-logs";
 import type { CalendarEvent } from "@/hooks/use-events";
 import type { Member } from "@/hooks/use-members";
+import { generateSeriesDates, type SeriesOccurrence } from "@/lib/series-utils";
 
 export interface ParsedEvent {
   title: string;
@@ -50,6 +51,19 @@ function isoToLocalDatetime(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function toDateString(date: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+const REMINDER_PRESETS = [
+  { minutes: 15, label: "15 min before" },
+  { minutes: 60, label: "1 hour before" },
+  { minutes: 1440, label: "1 day before" },
+];
+
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
 export function EventDialog({
   date,
   event,
@@ -58,11 +72,10 @@ export function EventDialog({
   onClose,
   onSaved,
 }: EventDialogProps) {
+  // Shared fields
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [reminderMinutes, setReminderMinutes] = useState<Set<number>>(new Set());
@@ -70,12 +83,31 @@ export function EventDialog({
   const [saving, setSaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  // Single event fields
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+
+  // Series fields
+  const [createMode, setCreateMode] = useState<"single" | "series">("single");
+  const [seriesStartDate, setSeriesStartDate] = useState("");
+  const [seriesEndDate, setSeriesEndDate] = useState("");
+  const [seriesStartTime, setSeriesStartTime] = useState("09:00");
+  const [seriesEndTime, setSeriesEndTime] = useState("10:00");
+  const [repeatEvery, setRepeatEvery] = useState(1);
+  const [repeatUnit, setRepeatUnit] = useState<"days" | "weeks" | "months">("weeks");
+  const [weekDays, setWeekDays] = useState<Set<number>>(new Set());
+  const [monthDay, setMonthDay] = useState(1);
+  const [previewDates, setPreviewDates] = useState<SeriesOccurrence[] | null>(null);
+  const [seriesEditMode, setSeriesEditMode] = useState<"single" | "series" | null>(null);
+
   const { logs, isLoading: logsLoading } = useEventLogs(event?.id ?? null);
 
   const isCreate = date !== null && event === null;
   const isEdit = event !== null;
+  const isSeriesEvent = isEdit && !!event?.seriesId;
   const open = isCreate || isEdit;
-  const submitLabel = isEdit ? "Save Changes" : "Create Event";
+  const isSeries = isCreate && createMode === "series";
+  const isSeriesEdit = isSeriesEvent && seriesEditMode === "series";
 
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen) {
@@ -83,12 +115,6 @@ export function EventDialog({
       resetForm();
     }
   }
-
-  const REMINDER_PRESETS = [
-    { minutes: 15, label: "15 min before" },
-    { minutes: 60, label: "1 hour before" },
-    { minutes: 1440, label: "1 day before" },
-  ];
 
   function resetForm() {
     setTitle("");
@@ -102,10 +128,20 @@ export function EventDialog({
     setError(null);
     setSaving(false);
     setConfirmingDelete(false);
+    setCreateMode("single");
+    setSeriesStartDate("");
+    setSeriesEndDate("");
+    setSeriesStartTime("09:00");
+    setSeriesEndTime("10:00");
+    setRepeatEvery(1);
+    setRepeatUnit("weeks");
+    setWeekDays(new Set());
+    setMonthDay(1);
+    setPreviewDates(null);
+    setSeriesEditMode(null);
   }
 
-  // Pre-fill from smart input — LLM returns UTC times that represent the user's
-  // intended local time, so extract YYYY-MM-DDTHH:MM directly without Date conversion
+  // Pre-fill from smart input
   useEffect(() => {
     if (parsedEvent && date && !event) {
       setTitle(parsedEvent.title);
@@ -119,13 +155,18 @@ export function EventDialog({
     }
   }, [parsedEvent, date, event]);
 
-  // Set defaults when creating (date changes)
+  // Set defaults when creating
   useEffect(() => {
     if (date && !event && !parsedEvent) {
       const hours = date.getHours();
-      const startHour = hours > 0 ? hours : 9; // month clicks = midnight → default 9am
+      const startHour = hours > 0 ? hours : 9;
       setStart(toLocalDatetime(date, startHour));
       setEnd(toLocalDatetime(date, startHour + 1));
+      setSeriesStartDate(toDateString(date));
+      // Default end date: 1 month from start
+      const endDate = new Date(date);
+      endDate.setMonth(endDate.getMonth() + 1);
+      setSeriesEndDate(toDateString(endDate));
     }
   }, [date, event, parsedEvent]);
 
@@ -142,8 +183,36 @@ export function EventDialog({
       setReminderMinutes(
         new Set(event.reminders.filter((r) => r.channel === "email").map((r) => r.minutesBefore)),
       );
+      // Series event: default to single edit, toggle to series
+      if (event.seriesId) {
+        setSeriesEditMode("single");
+      }
     }
   }, [event]);
+
+  async function loadSeriesConfig() {
+    if (!event?.seriesId) return;
+    try {
+      const res = await fetch(`/api/series/${event.seriesId}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load series config");
+      const config = await res.json();
+      setSeriesStartDate(config.startDate);
+      setSeriesEndDate(config.endDate);
+      setSeriesStartTime(config.startTime);
+      setSeriesEndTime(config.endTime);
+      setRepeatEvery(config.repeatEvery);
+      setRepeatUnit(config.repeatUnit);
+      if (config.weekDays) {
+        setWeekDays(new Set(config.weekDays.split(",").map(Number)));
+      }
+      if (config.monthDay) {
+        setMonthDay(config.monthDay);
+      }
+      setSeriesEditMode("series");
+    } catch {
+      setError("Failed to load series configuration");
+    }
+  }
 
   function toggleReminder(minutes: number) {
     setReminderMinutes((prev) => {
@@ -157,65 +226,291 @@ export function EventDialog({
     });
   }
 
+  function toggleWeekDay(day: number) {
+    setWeekDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(day)) {
+        next.delete(day);
+      } else {
+        next.add(day);
+      }
+      return next;
+    });
+  }
+
+  function handlePreview() {
+    setError(null);
+    if (!seriesStartDate || !seriesEndDate) {
+      setError("Start and end dates are required");
+      return;
+    }
+    if (repeatUnit === "weeks" && weekDays.size === 0) {
+      setError("Select at least one day of the week");
+      return;
+    }
+    const dates = generateSeriesDates({
+      startDate: seriesStartDate,
+      endDate: seriesEndDate,
+      startTime: seriesStartTime,
+      endTime: seriesEndTime,
+      repeatEvery,
+      repeatUnit,
+      weekDays: [...weekDays],
+      monthDay,
+    });
+    if (dates.length === 0) {
+      setError("No events would be created with these settings");
+      return;
+    }
+    setPreviewDates(dates);
+  }
+
+  async function handleSeriesUpdate() {
+    setError(null);
+    setSaving(true);
+    try {
+      if (!previewDates || !event?.seriesId) return;
+
+      // 1. Update series config
+      await fetch(`/api/series/${event.seriesId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          startDate: seriesStartDate,
+          endDate: seriesEndDate,
+          startTime: seriesStartTime,
+          endTime: seriesEndTime,
+          repeatEvery,
+          repeatUnit,
+          weekDays: repeatUnit === "weeks" ? [...weekDays].join(",") : null,
+          monthDay: repeatUnit === "months" ? monthDay : null,
+        }),
+      });
+
+      // 2. Delete all old events in the series
+      await fetch(`/api/events/series/${event.seriesId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      // 3. Create new events
+      for (const occ of previewDates) {
+        const body = {
+          title,
+          location: location || undefined,
+          description: description || undefined,
+          start: occ.start.toISOString(),
+          end: occ.end.toISOString(),
+          private: isPrivate,
+          seriesId: event.seriesId,
+          ...(assigneeIds.length > 0 ? { assigneeIds } : {}),
+        };
+
+        const res = await fetch("/api/events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data?.error ?? `Failed to create event (${res.status})`);
+        }
+
+        if (reminderMinutes.size > 0) {
+          const eventData = await res.json().catch(() => null);
+          if (eventData?.id) {
+            for (const minutes of reminderMinutes) {
+              await fetch(`/api/events/${eventData.id}/reminders`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ minutesBefore: minutes, channel: "email" }),
+              });
+            }
+          }
+        }
+      }
+
+      onSaved();
+      onClose();
+      resetForm();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSeriesCreate() {
+    setError(null);
+    setSaving(true);
+    try {
+      if (!previewDates) return;
+
+      // 1. Create series config record
+      const seriesRes = await fetch("/api/series", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          startDate: seriesStartDate,
+          endDate: seriesEndDate,
+          startTime: seriesStartTime,
+          endTime: seriesEndTime,
+          repeatEvery,
+          repeatUnit,
+          weekDays: repeatUnit === "weeks" ? [...weekDays].join(",") : null,
+          monthDay: repeatUnit === "months" ? monthDay : null,
+        }),
+      });
+      if (!seriesRes.ok) throw new Error("Failed to create series config");
+      const seriesRecord = await seriesRes.json();
+
+      // 2. Create individual events referencing the series
+      for (const occ of previewDates) {
+        const body = {
+          title,
+          location: location || undefined,
+          description: description || undefined,
+          start: occ.start.toISOString(),
+          end: occ.end.toISOString(),
+          private: isPrivate,
+          seriesId: seriesRecord.id,
+          ...(assigneeIds.length > 0 ? { assigneeIds } : {}),
+        };
+
+        const res = await fetch("/api/events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data?.error ?? `Failed to create event (${res.status})`);
+        }
+
+        // Add reminders for each event
+        if (reminderMinutes.size > 0) {
+          const eventData = await res.json().catch(() => null);
+          if (eventData?.id) {
+            for (const minutes of reminderMinutes) {
+              await fetch(`/api/events/${eventData.id}/reminders`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ minutesBefore: minutes, channel: "email" }),
+              });
+            }
+          }
+        }
+      }
+
+      onSaved();
+      onClose();
+      resetForm();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSaving(true);
 
     try {
-      const body = {
-        title,
-        location: location || undefined,
-        description: description || undefined,
-        start: new Date(start).toISOString(),
-        end: new Date(end).toISOString(),
-        private: isPrivate,
-        ...(assigneeIds.length > 0 ? { assigneeIds } : {}),
-      };
-
-      const url = isEdit ? `/api/events/${event.id}` : "/api/events";
-      const method = isEdit ? "PATCH" : "POST";
-
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(body),
-      });
-
-      const responseData = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        const action = isEdit ? "update" : "create";
-        throw new Error(responseData?.error ?? `Failed to ${action} event (${res.status})`);
-      }
-
-      // Sync reminders
-      const eventId = isEdit ? event.id : responseData?.id;
-      if (eventId) {
-        const originalMinutes = new Set(
-          event?.reminders.filter((r) => r.channel === "email").map((r) => r.minutesBefore) ?? [],
-        );
-
-        // Remove reminders that were unchecked
-        for (const r of event?.reminders ?? []) {
-          if (r.channel === "email" && !reminderMinutes.has(r.minutesBefore)) {
-            await fetch(`/api/events/${eventId}/reminders/${r.id}`, {
-              method: "DELETE",
-              credentials: "include",
-            });
-          }
+      if (isSeriesEvent && event.seriesId) {
+        // Bulk update shared fields across all series events
+        const seriesBody = {
+          title,
+          location: location || undefined,
+          description: description || undefined,
+          private: isPrivate,
+        };
+        const seriesRes = await fetch(`/api/events/series/${event.seriesId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(seriesBody),
+        });
+        if (!seriesRes.ok) {
+          const data = await seriesRes.json().catch(() => null);
+          throw new Error(data?.error ?? `Failed to update series (${seriesRes.status})`);
         }
 
-        // Add reminders that were checked
-        for (const minutes of reminderMinutes) {
-          if (!originalMinutes.has(minutes)) {
-            await fetch(`/api/events/${eventId}/reminders`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              credentials: "include",
-              body: JSON.stringify({ minutesBefore: minutes, channel: "email" }),
-            });
+        // Update this event's individual time
+        const timeBody = {
+          start: new Date(start).toISOString(),
+          end: new Date(end).toISOString(),
+        };
+        const timeRes = await fetch(`/api/events/${event.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(timeBody),
+        });
+        if (!timeRes.ok) {
+          const data = await timeRes.json().catch(() => null);
+          throw new Error(data?.error ?? `Failed to update event time (${timeRes.status})`);
+        }
+      } else {
+        const body = {
+          title,
+          location: location || undefined,
+          description: description || undefined,
+          start: new Date(start).toISOString(),
+          end: new Date(end).toISOString(),
+          private: isPrivate,
+          ...(assigneeIds.length > 0 ? { assigneeIds } : {}),
+        };
+
+        const url = isEdit ? `/api/events/${event.id}` : "/api/events";
+        const method = isEdit ? "PATCH" : "POST";
+
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(body),
+        });
+
+        const responseData = await res.json().catch(() => null);
+
+        if (!res.ok) {
+          const action = isEdit ? "update" : "create";
+          throw new Error(responseData?.error ?? `Failed to ${action} event (${res.status})`);
+        }
+
+        // Sync reminders for non-series events
+        const eventId = isEdit ? event.id : responseData?.id;
+        if (eventId) {
+          const originalMinutes = new Set(
+            event?.reminders.filter((r) => r.channel === "email").map((r) => r.minutesBefore) ?? [],
+          );
+          for (const r of event?.reminders ?? []) {
+            if (r.channel === "email" && !reminderMinutes.has(r.minutesBefore)) {
+              await fetch(`/api/events/${eventId}/reminders/${r.id}`, {
+                method: "DELETE",
+                credentials: "include",
+              });
+            }
+          }
+          for (const minutes of reminderMinutes) {
+            if (!originalMinutes.has(minutes)) {
+              await fetch(`/api/events/${eventId}/reminders`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ minutesBefore: minutes, channel: "email" }),
+              });
+            }
           }
         }
       }
@@ -230,22 +525,23 @@ export function EventDialog({
     }
   }
 
-  async function handleDelete() {
+  async function handleDelete(deleteSeries = false) {
     if (!event) return;
     setError(null);
     setSaving(true);
-
     try {
-      const res = await fetch(`/api/events/${event.id}`, {
+      const url =
+        deleteSeries && event.seriesId
+          ? `/api/events/series/${event.seriesId}`
+          : `/api/events/${event.id}`;
+      const res = await fetch(url, {
         method: "DELETE",
         credentials: "include",
       });
-
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.error ?? `Failed to delete event (${res.status})`);
+        throw new Error(data?.error ?? `Failed to delete (${res.status})`);
       }
-
       onSaved();
       onClose();
       resetForm();
@@ -256,17 +552,145 @@ export function EventDialog({
     }
   }
 
+  // --- Preview view (create or series edit) ---
+  if ((isSeries || isSeriesEdit) && previewDates) {
+    const isEditingSeries = isSeriesEdit;
+    return (
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {isEditingSeries ? "Update Series — Preview" : "Create Series — Preview"}
+            </DialogTitle>
+            <DialogDescription>
+              {isEditingSeries
+                ? `This will replace all events in the series with ${previewDates.length} new events for "${title}"`
+                : `This will create ${previewDates.length} events for "${title}"`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-64 overflow-y-auto rounded-md border p-3">
+            <div className="flex flex-col gap-1 text-sm">
+              {previewDates.map((occ, i) => (
+                <div key={occ.start.toISOString()} className="flex items-center gap-2">
+                  <span className="w-6 text-right text-muted-foreground">{i + 1}.</span>
+                  <span>
+                    {occ.start.toLocaleDateString("en-US", {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {occ.start.toLocaleTimeString("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}{" "}
+                    –{" "}
+                    {occ.end.toLocaleTimeString("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPreviewDates(null)}>
+              Back
+            </Button>
+            <Button
+              type="button"
+              disabled={saving}
+              onClick={isEditingSeries ? handleSeriesUpdate : handleSeriesCreate}
+            >
+              {saving && "Saving..."}
+              {!saving && isEditingSeries && `Update ${previewDates.length} Events`}
+              {!saving && !isEditingSeries && `Create ${previewDates.length} Events`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // --- Main form ---
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Event" : "New Event"}</DialogTitle>
+          <DialogTitle>
+            {isSeriesEdit && "Edit Entire Series"}
+            {isEdit && !isSeriesEdit && "Edit Event"}
+            {!isEdit && "New Event"}
+          </DialogTitle>
           <DialogDescription>
-            {isEdit ? "Update or delete this event." : "Create a new calendar event."}
+            {isSeriesEdit && "Update the series settings and regenerate all events."}
+            {isEdit && !isSeriesEdit && "Update or delete this event."}
+            {!isEdit && "Create a new calendar event."}
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form
+          onSubmit={
+            isSeries || isSeriesEdit
+              ? (e) => {
+                  e.preventDefault();
+                  handlePreview();
+                }
+              : handleSubmit
+          }
+          className="flex flex-col gap-4"
+        >
+          {/* Mode toggle — create: single/series, edit series event: this event/entire series */}
+          {isCreate && (
+            <div className="flex items-center rounded-md border w-fit">
+              <Button
+                type="button"
+                variant={createMode === "single" ? "secondary" : "ghost"}
+                size="sm"
+                className="rounded-r-none"
+                onClick={() => setCreateMode("single")}
+              >
+                Single
+              </Button>
+              <Button
+                type="button"
+                variant={createMode === "series" ? "secondary" : "ghost"}
+                size="sm"
+                className="rounded-l-none"
+                onClick={() => setCreateMode("series")}
+              >
+                Series
+              </Button>
+            </div>
+          )}
+          {isSeriesEvent && (
+            <div className="flex items-center rounded-md border w-fit">
+              <Button
+                type="button"
+                variant={seriesEditMode === "single" ? "secondary" : "ghost"}
+                size="sm"
+                className="rounded-r-none"
+                onClick={() => setSeriesEditMode("single")}
+              >
+                This Event
+              </Button>
+              <Button
+                type="button"
+                variant={seriesEditMode === "series" ? "secondary" : "ghost"}
+                size="sm"
+                className="rounded-l-none"
+                onClick={() => {
+                  if (seriesEditMode !== "series") void loadSeriesConfig();
+                }}
+              >
+                Entire Series
+              </Button>
+            </div>
+          )}
+
           <div className="flex flex-col gap-2">
             <Label htmlFor="event-title">Title</Label>
             <Input
@@ -289,41 +713,149 @@ export function EventDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="event-start">Start</Label>
-              <Input
-                id="event-start"
-                type="datetime-local"
-                value={start}
-                onChange={(e) => {
-                  const newStart = e.target.value;
-                  setStart(newStart);
-                  // Auto-set end to start + 30 min
-                  if (newStart) {
-                    const startDate = new Date(newStart);
-                    const newEnd = new Date(startDate.getTime() + 30 * 60 * 1000);
-                    const pad = (n: number) => n.toString().padStart(2, "0");
-                    setEnd(
-                      `${newEnd.getFullYear()}-${pad(newEnd.getMonth() + 1)}-${pad(newEnd.getDate())}T${pad(newEnd.getHours())}:${pad(newEnd.getMinutes())}`,
-                    );
-                  }
-                }}
-                required
-              />
+          {/* Time inputs — different for single vs series */}
+          {isSeries || isSeriesEdit ? (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label>Start Date</Label>
+                  <Input
+                    type="date"
+                    value={seriesStartDate}
+                    onChange={(e) => setSeriesStartDate(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>End Date</Label>
+                  <Input
+                    type="date"
+                    value={seriesEndDate}
+                    min={seriesStartDate}
+                    onChange={(e) => setSeriesEndDate(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label>Start Time</Label>
+                  <Input
+                    type="time"
+                    value={seriesStartTime}
+                    onChange={(e) => setSeriesStartTime(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>End Time</Label>
+                  <Input
+                    type="time"
+                    value={seriesEndTime}
+                    min={seriesStartTime}
+                    onChange={(e) => setSeriesEndTime(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Repeat pattern */}
+              <div className="flex flex-col gap-2">
+                <Label>Repeat</Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">Every</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={repeatEvery}
+                    onChange={(e) => setRepeatEvery(Number(e.target.value) || 1)}
+                    className="w-16"
+                  />
+                  <select
+                    value={repeatUnit}
+                    onChange={(e) => setRepeatUnit(e.target.value as "days" | "weeks" | "months")}
+                    className="rounded-md border bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="days">Days</option>
+                    <option value="weeks">Weeks</option>
+                    <option value="months">Months</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Week day selector */}
+              {repeatUnit === "weeks" && (
+                <div className="flex flex-col gap-2">
+                  <Label>On days</Label>
+                  <div className="flex gap-1">
+                    {DAY_LABELS.map((label, i) => (
+                      <Button
+                        key={label}
+                        type="button"
+                        variant={weekDays.has(i) ? "default" : "outline"}
+                        size="sm"
+                        className="w-10 px-0"
+                        onClick={() => toggleWeekDay(i)}
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Month day selector */}
+              {repeatUnit === "months" && (
+                <div className="flex items-center gap-2">
+                  <Label>On day</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={monthDay}
+                    onChange={(e) => setMonthDay(Number(e.target.value) || 1)}
+                    className="w-16"
+                  />
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="event-start">Start</Label>
+                <Input
+                  id="event-start"
+                  type="datetime-local"
+                  value={start}
+                  onChange={(e) => {
+                    const newStart = e.target.value;
+                    setStart(newStart);
+                    if (newStart) {
+                      const startDate = new Date(newStart);
+                      const newEnd = new Date(startDate.getTime() + 30 * 60 * 1000);
+                      const pad = (n: number) => n.toString().padStart(2, "0");
+                      setEnd(
+                        `${newEnd.getFullYear()}-${pad(newEnd.getMonth() + 1)}-${pad(newEnd.getDate())}T${pad(newEnd.getHours())}:${pad(newEnd.getMinutes())}`,
+                      );
+                    }
+                  }}
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="event-end">End</Label>
+                <Input
+                  id="event-end"
+                  type="datetime-local"
+                  min={start}
+                  value={end}
+                  onChange={(e) => setEnd(e.target.value)}
+                  required
+                />
+              </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="event-end">End</Label>
-              <Input
-                id="event-end"
-                type="datetime-local"
-                min={start}
-                value={end}
-                onChange={(e) => setEnd(e.target.value)}
-                required
-              />
-            </div>
-          </div>
+          )}
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="event-description">Description</Label>
@@ -394,13 +926,17 @@ export function EventDialog({
               <div className="flex items-center gap-2">
                 {confirmingDelete ? (
                   <>
-                    <span className="text-sm text-muted-foreground">Delete this event?</span>
+                    <span className="text-xs text-muted-foreground">
+                      {isSeriesEvent && seriesEditMode === "series"
+                        ? "Delete entire series?"
+                        : "Delete this event?"}
+                    </span>
                     <Button
                       type="button"
                       variant="destructive"
                       size="sm"
                       disabled={saving}
-                      onClick={handleDelete}
+                      onClick={() => handleDelete(isSeriesEvent && seriesEditMode === "series")}
                     >
                       Confirm
                     </Button>
@@ -430,7 +966,11 @@ export function EventDialog({
                 Cancel
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? "Saving..." : submitLabel}
+                {saving && "Saving..."}
+                {!saving && isSeriesEdit && "Preview Changes"}
+                {!saving && isEdit && !isSeriesEdit && "Save Changes"}
+                {!saving && isCreate && !isSeries && "Create Event"}
+                {!saving && isSeries && "Preview Series"}
               </Button>
             </div>
           </DialogFooter>

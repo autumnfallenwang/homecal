@@ -6,10 +6,11 @@ import { cn } from "@/lib/utils";
 interface EventPillProps {
   title: string;
   color: string;
+  isSeries?: boolean;
   onClick?: (e: React.MouseEvent) => void;
 }
 
-export function EventPill({ title, color, onClick }: EventPillProps) {
+export function EventPill({ title, color, isSeries, onClick }: EventPillProps) {
   return (
     <button
       type="button"
@@ -24,6 +25,7 @@ export function EventPill({ title, color, onClick }: EventPillProps) {
       }}
       title={title}
     >
+      {isSeries && <span className="mr-0.5">↻</span>}
       {title}
     </button>
   );

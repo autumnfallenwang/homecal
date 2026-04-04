@@ -174,6 +174,7 @@ export function DayGrid({ date, events, onEventClick, onSlotClick }: DayGridProp
                   key={p.event.id}
                   title={p.event.title}
                   timeLabel={formatTimeRange(startDate, endDate)}
+                  isSeries={!!p.event.seriesId}
                   color={color}
                   top={p.top}
                   height={p.height}

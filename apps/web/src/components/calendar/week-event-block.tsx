@@ -6,6 +6,7 @@ interface WeekEventBlockProps {
   title: string;
   timeLabel: string;
   color: string;
+  isSeries?: boolean;
   top: number;
   height: number;
   left: string;
@@ -17,6 +18,7 @@ export function WeekEventBlock({
   title,
   timeLabel,
   color,
+  isSeries,
   top,
   height,
   left,
@@ -38,7 +40,10 @@ export function WeekEventBlock({
       }}
       title={title}
     >
-      <span className="block truncate">{title}</span>
+      <span className="block truncate">
+        {isSeries && "↻ "}
+        {title}
+      </span>
       {height >= 48 && <span className="block truncate text-[10px] opacity-70">{timeLabel}</span>}
     </button>
   );

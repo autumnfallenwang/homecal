@@ -67,6 +67,19 @@ export const verifications = pgTable("verifications", {
   updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
 
+export const series = pgTable("series", {
+  id: uuid().primaryKey().defaultRandom(),
+  startDate: text().notNull(),
+  endDate: text().notNull(),
+  startTime: text().notNull(),
+  endTime: text().notNull(),
+  repeatEvery: integer().notNull().default(1),
+  repeatUnit: text().notNull().default("weeks"),
+  weekDays: text(),
+  monthDay: integer(),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
 export const events = pgTable(
   "events",
   {
@@ -80,12 +93,14 @@ export const events = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     private: boolean().notNull().default(false),
+    seriesId: uuid().references(() => series.id, { onDelete: "cascade" }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("events_owner_id_idx").on(table.ownerId),
     index("events_start_idx").on(table.start),
+    index("events_series_id_idx").on(table.seriesId),
   ],
 );
 
@@ -183,8 +198,13 @@ export const accountsRelations = relations(accounts, ({ one }) => ({
   user: one(users, { fields: [accounts.userId], references: [users.id] }),
 }));
 
+export const seriesRelations = relations(series, ({ many }) => ({
+  events: many(events),
+}));
+
 export const eventsRelations = relations(events, ({ one, many }) => ({
   owner: one(users, { fields: [events.ownerId], references: [users.id] }),
+  seriesRef: one(series, { fields: [events.seriesId], references: [series.id] }),
   logs: many(eventLogs),
   assignees: many(eventAssignees),
   reminders: many(eventReminders),

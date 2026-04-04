@@ -43,6 +43,20 @@
       "when": 1775246966328,
       "tag": "0005_yielding_vulcan",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775251336020,
+      "tag": "0006_early_thing",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775260400596,
+      "tag": "0007_dark_microbe",
+      "breakpoints": true
     }
   ]
 }

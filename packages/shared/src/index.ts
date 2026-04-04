@@ -7,6 +7,7 @@ export const createEventSchema = z.object({
   start: z.iso.datetime(),
   end: z.iso.datetime(),
   private: z.boolean().optional().default(false),
+  seriesId: z.string().uuid().optional(),
   assigneeIds: z.array(z.string().uuid()).optional(),
 });
 

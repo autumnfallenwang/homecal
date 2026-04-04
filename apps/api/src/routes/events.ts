@@ -85,6 +85,7 @@ eventsApp.post("/", async (c) => {
       start: new Date(data.start),
       end: new Date(data.end),
       private: data.private,
+      seriesId: data.seriesId ?? null,
       ownerId: userId,
     })
     .returning();
@@ -373,4 +374,73 @@ eventsApp.delete("/:id", async (c) => {
   await db.delete(events).where(eq(events.id, id));
 
   return c.json({ success: true });
+});
+
+// PATCH /series/:seriesId — Bulk update all events in a series
+eventsApp.patch("/series/:seriesId", async (c) => {
+  const seriesId = c.req.param("seriesId");
+  const userId = c.get("user").id;
+
+  const body = await c.req.json();
+  const parsed = updateEventSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.issues }, 400);
+  }
+
+  // Check series exists and user can access it
+  const seriesEvents = await db.query.events.findMany({
+    where: eq(events.seriesId, seriesId),
+  });
+
+  if (seriesEvents.length === 0) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  // Check access — if any event is private, only owner can update
+  const hasPrivate = seriesEvents.some((e) => e.private && e.ownerId !== userId);
+  if (hasPrivate) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  const data = parsed.data;
+  const updateValues: Record<string, unknown> = {};
+
+  if (data.title !== undefined) updateValues.title = data.title;
+  if (data.location !== undefined) updateValues.location = data.location ?? null;
+  if (data.description !== undefined) updateValues.description = data.description ?? null;
+  if (data.private !== undefined) updateValues.private = data.private;
+
+  if (Object.keys(updateValues).length === 0) {
+    return c.json({ updated: 0 });
+  }
+
+  updateValues.updatedAt = new Date();
+
+  await db.update(events).set(updateValues).where(eq(events.seriesId, seriesId));
+
+  return c.json({ updated: seriesEvents.length });
+});
+
+// DELETE /series/:seriesId — Bulk delete all events in a series
+eventsApp.delete("/series/:seriesId", async (c) => {
+  const seriesId = c.req.param("seriesId");
+  const userId = c.get("user").id;
+
+  const seriesEvents = await db.query.events.findMany({
+    where: eq(events.seriesId, seriesId),
+  });
+
+  if (seriesEvents.length === 0) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  // Check access
+  const hasPrivate = seriesEvents.some((e) => e.private && e.ownerId !== userId);
+  if (hasPrivate) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  await db.delete(events).where(eq(events.seriesId, seriesId));
+
+  return c.json({ success: true, deleted: seriesEvents.length });
 });

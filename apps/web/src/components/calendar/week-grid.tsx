@@ -215,6 +215,7 @@ export function WeekGrid({ weekDates, events, onEventClick, onSlotClick }: WeekG
                       key={p.event.id}
                       title={p.event.title}
                       timeLabel={formatTimeRange(startDate, endDate)}
+                      isSeries={!!p.event.seriesId}
                       color={color}
                       top={p.top}
                       height={p.height}

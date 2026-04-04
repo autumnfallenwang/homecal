@@ -79,11 +79,20 @@
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 37 | Series schema + API | Not started | `seriesId` column (nullable UUID) on events, bulk update `PATCH /api/events/series/:seriesId`, bulk delete `DELETE /api/events/series/:seriesId` |
-| 38 | Series web UI | Not started | Single/Series toggle, series form (date range, time, repeat pattern: days/weeks/months), preview step with confirm, repeat icon on pills |
-| 39 | Series edit/delete | Not started | Series edit mode (updates all events), delete options ("Delete This Event" / "Delete Entire Series") |
+| 37 | Series schema + API | ✅ Done | `seriesId` column (nullable UUID) with index, bulk update `PATCH /api/events/series/:seriesId`, bulk delete `DELETE /api/events/series/:seriesId`, create accepts seriesId, 10 new integration tests |
+| 38 | Series web UI | ✅ Done | Single/Series toggle in create mode, series form (date range, time, repeat every X days/weeks/months, weekday toggles, month day picker), preview step with event count + date list + confirm, batch create with shared seriesId, ↻ repeat icon on pills/blocks |
+| 39 | Series edit/delete — basic | ✅ Done | Basic bulk update for shared fields, "Delete This Event" / "Delete Entire Series" options |
+| 40 | Series table + API | ✅ Done | New `series` table (10 typed columns), `events.seriesId` FKs to `series.id` with cascade delete, POST/PUT/GET endpoints, frontend batch create stores series config, 2 new schema tests |
+| 41 | Series full edit UI | ✅ Done | Click series event → choice dialog ("Edit this event" / "Edit entire series"). Full series edit loads config from API, reopens series form pre-populated, preview shows regenerated events, confirm = update config + delete old + create new events |
+| 42 | Series single event edit | ✅ Done | "Edit this event" in choice dialog → normal single edit form, changes only that occurrence |
 
-## Phase 10: Future Enhancements (deferred)
+## Phase 10: Web Voice Input
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 43 | Web voice input | Not started | Mic button in CalendarHeader using Chrome Web Speech API, speech-to-text → feeds into existing smart input pipeline → LLM parse → pre-fill event form |
+
+## Phase 11: Future Enhancements (deferred)
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
@@ -125,7 +134,7 @@
 
 ## What's Next
 
-Task 37: Series schema + API — seriesId column, bulk update/delete endpoints.
+Task 43: Web voice input — mic button using Chrome Web Speech API.
 
 ## Reference Docs
 
