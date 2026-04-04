@@ -126,25 +126,24 @@ export function CalendarHeader({
   const [listening, setListening] = useState(false);
 
   function handleVoiceInput() {
-    const SpeechRecognition =
-      (window as unknown as { webkitSpeechRecognition?: typeof window.SpeechRecognition })
-        .webkitSpeechRecognition ?? window.SpeechRecognition;
-    if (!SpeechRecognition) {
+    // biome-ignore lint/suspicious/noExplicitAny: Web Speech API not in all TS type libs
+    const w = window as any;
+    const SpeechRecognitionCtor = w.webkitSpeechRecognition ?? w.SpeechRecognition;
+    if (!SpeechRecognitionCtor) {
       setSmartText("Voice input not supported in this browser");
       return;
     }
 
-    const recognition = new SpeechRecognition();
+    const recognition = new SpeechRecognitionCtor();
     recognition.lang = "en-US";
     recognition.interimResults = false;
 
     recognition.onstart = () => setListening(true);
     recognition.onend = () => setListening(false);
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: { results: { 0: { 0: { transcript: string } } } }) => {
       const transcript = event.results[0][0].transcript;
       setSmartText(transcript);
-      // Auto-submit to LLM
       if (transcript.trim() && onSmartInput) {
         onSmartInput(transcript.trim());
         setSmartText("");
