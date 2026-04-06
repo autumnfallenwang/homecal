@@ -243,7 +243,34 @@ Batch event creation with repeat patterns and series management.
 Voice input for the web calendar using Chrome's built-in Web Speech API. No backend changes — speech-to-text in the browser feeds into the existing LLM smart input pipeline.
 43. Web voice input — mic button next to smart input sparkles button in CalendarHeader. Click → Chrome captures mic → speech-to-text via Google servers → transcript fed to `onSmartInput(text)` → LLM parse → pre-fill event form. Listening indicator while recording. Chrome/Edge only.
 
-### Phase 11 — Future Enhancements (deferred)
+### Phase 11 — Unified Quick Add + Image Input
+Consolidate all input methods (text, voice, image, .ics import, manual) into a single "Quick Add" popover, replacing the inline header smart input. Cleaner header, scales to new input methods, works on mobile.
+
+**UI redesign:** Remove smart text input + sparkles + mic from header center. Header becomes: `Logo | [Month][Week][Day] | ◀ Title ▶ | [+ Add] | user ⚙ 🚪`. The "+ Add" button opens a Quick Add popover/bottom-sheet containing all input methods:
+```
+┌──────────────────────────────────┐
+│  ✨ Type or speak to add event   │
+│  ┌────────────────────────┐  🎤  │
+│  │ Dentist next Tue 2pm   │      │
+│  └────────────────────────┘      │
+│                                  │
+│  📷 Upload image / photo         │
+│  📄 Import .ics file             │
+│  ─────────────────────────────── │
+│  ✏️  Or create manually           │
+└──────────────────────────────────┘
+```
+
+44. Quick Add popover — refactor CalendarHeader: remove inline smart input/voice from header, add single "+ Add" button that opens a shadcn Popover (desktop) or Drawer (mobile). Inside: smart text input with inline mic button (reuses existing text parse + voice logic), image upload option, .ics import option, and "create manually" link that opens blank EventDialog. All paths lead to the same EventDialog pre-fill flow.
+45. Image input — backend + frontend. Backend: extend `callLlm` to accept optional base64 image, send as multipart content array `[{type:"text"}, {type:"image_url"}]` to LLM gateway (OpenAI vision API format). New endpoint `POST /api/events/parse-image` accepts image upload (multipart/form-data), sends image + system prompt to vision-capable LLM, returns same parsed event JSON. Frontend: image upload area in Quick Add popover (click to browse or drag-and-drop), accepts jpg/png/heic, shows thumbnail preview, sends to parse-image endpoint, pre-fills EventDialog with result. Works for photos of handwritten notes, screenshots, flyers, etc.
+
+### Phase 12 — iCalendar Import/Export
+Import and export events using the standard iCalendar (.ics) format (RFC 5545). Enables interop with Google Calendar, Apple Calendar, Outlook, and any app that supports .ics files. No schema changes needed — .ics fields map directly to existing event columns.
+46. iCalendar parser + import API — `POST /api/events/import` accepts .ics file upload, parses VEVENT blocks using `node-ical` (or `ical.js`), maps fields (SUMMARY→title, DTSTART/DTEND→start/end, LOCATION→location, DESCRIPTION→description, CLASS:PRIVATE→private), converts all timestamps to UTC, handles all-day events (DATE values → midnight-to-midnight), returns created event count. RRULE recurring events: map common patterns (daily/weekly/monthly) to series table, expand exotic patterns (BYDAY=2TU, YEARLY) into individual events. Importing user becomes owner + default assignee.
+47. Import web UI — "Import" option in Quick Add popover, file picker for .ics files, preview parsed events (count + list with titles/dates) before confirming, progress indicator for large files, error summary for skipped/invalid events.
+48. Export API + web UI — `GET /api/events/export.ics` returns all visible events as .ics file (with optional date range query params). VEVENT blocks with UID (event id), SUMMARY, DTSTART/DTEND, LOCATION, DESCRIPTION, CLASS. "Export" button in settings or header menu triggers download. Series events include RRULE where possible.
+
+### Phase 13 — Future Enhancements (deferred)
 - iOS push via APNs — enable when Apple Developer account is available
 - Web Push notifications — Service Worker + Web Push API (add if users want desktop alerts)
 - iOS voice input — Speech framework mic button → parse endpoint (requires physical device)

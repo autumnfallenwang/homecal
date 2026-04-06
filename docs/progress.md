@@ -92,7 +92,22 @@
 |---|------|--------|-------|
 | 43 | Web voice input | ✅ Done | Mic button in CalendarHeader, Chrome Web Speech API, auto-submits transcript to LLM parse, listening indicator (pulsing mic icon), falls back gracefully on unsupported browsers |
 
-## Phase 11: Future Enhancements (deferred)
+## Phase 11: Unified Quick Add + Image Input
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 44 | Quick Add popover | Not started | Refactor header: remove inline smart input/voice, single "+ Add" button → popover with text input + mic, image upload, .ics import, manual create |
+| 45 | Image input — backend + frontend | Not started | `POST /api/events/parse-image` — send image to vision LLM, return parsed event. Upload area in Quick Add popover (jpg/png/heic), preview, pre-fill EventDialog |
+
+## Phase 12: iCalendar Import/Export
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 46 | iCalendar parser + import API | Not started | `POST /api/events/import` — parse .ics VEVENT blocks, map fields to events, RRULE → series, all-day → midnight-to-midnight, timestamps → UTC |
+| 47 | Import web UI | Not started | .ics import option in Quick Add popover, file picker, preview parsed events before confirming, error summary for skipped events |
+| 48 | Export API + web UI | Not started | `GET /api/events/export.ics` — generate .ics from events, export button triggers download, series → RRULE |
+
+## Phase 13: Future Enhancements (deferred)
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
@@ -134,7 +149,7 @@
 
 ## What's Next
 
-Phase 10 (Web Voice Input) complete.
+Phase 10 (Web Voice Input) complete. Next up: Phase 11 (Unified Quick Add + Image Input) — tasks 44–45, then Phase 12 (iCalendar Import/Export) — tasks 46–48.
 
 ## Reference Docs
 
