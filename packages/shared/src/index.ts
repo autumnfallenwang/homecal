@@ -34,6 +34,11 @@ export const parseEventInputSchema = z.object({
   text: z.string().min(1).max(500),
 });
 
+export const parseImageInputSchema = z.object({
+  image: z.string().min(1).max(15_000_000), // ~10MB base64
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic"]),
+});
+
 export const parsedEventSchema = z.object({
   title: z.string().min(1).max(200),
   location: z.string().optional().default(""),
@@ -59,6 +64,7 @@ export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type EventQuery = z.infer<typeof eventQuerySchema>;
 export type ParseEventInput = z.infer<typeof parseEventInputSchema>;
+export type ParseImageInput = z.infer<typeof parseImageInputSchema>;
 export type ParsedEvent = z.infer<typeof parsedEventSchema>;
 export type CreateReminderInput = z.infer<typeof createReminderSchema>;
 export type RegisterDeviceInput = z.infer<typeof registerDeviceSchema>;

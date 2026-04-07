@@ -2,6 +2,7 @@ import {
   createEventSchema,
   eventQuerySchema,
   parseEventInputSchema,
+  parseImageInputSchema,
   updateEventSchema,
 } from "@homecal/shared";
 import { and, desc, eq, gte, lte, or } from "drizzle-orm";
@@ -10,7 +11,13 @@ import type { auth } from "../auth.js";
 import { db } from "../db/index.js";
 import { eventAssignees, eventLogs, events, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
-import { buildParsePrompt, callLlm, parseLlmResponse } from "../services/llm.js";
+import {
+  buildImageParsePrompt,
+  buildParsePrompt,
+  callLlm,
+  callLlmWithImage,
+  parseLlmResponse,
+} from "../services/llm.js";
 
 type Session = typeof auth.$Infer.Session;
 
@@ -61,6 +68,52 @@ eventsApp.post("/parse", async (c) => {
     return c.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "LLM parsing failed";
+    return c.json({ error: message }, 502);
+  }
+});
+
+// POST /parse-image — Parse image into event fields
+eventsApp.post("/parse-image", async (c) => {
+  const body = await c.req.json();
+  const parsed = parseImageInputSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.issues }, 400);
+  }
+
+  const gatewayUrl = process.env.LLM_GATEWAY_URL || "http://localhost:51277";
+  const model = process.env.LLM_MODEL || "claude-haiku-4-5";
+  const fallbackModel = process.env.LLM_FALLBACK_MODEL || "gemma3:27b";
+  const today = new Date().toISOString().split("T")[0];
+
+  const memberRows = await db
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .orderBy(users.name);
+  const memberNames = memberRows.map((m) => m.name);
+  const memberNameToId = new Map(memberRows.map((m) => [m.name, m.id]));
+
+  try {
+    const systemPrompt = buildImageParsePrompt(today, memberNames);
+    let raw: string;
+    try {
+      raw = await callLlmWithImage(
+        { gatewayUrl, model },
+        systemPrompt,
+        parsed.data.image,
+        parsed.data.mimeType,
+      );
+    } catch {
+      raw = await callLlmWithImage(
+        { gatewayUrl, model: fallbackModel },
+        systemPrompt,
+        parsed.data.image,
+        parsed.data.mimeType,
+      );
+    }
+    const result = parseLlmResponse(raw, memberNameToId);
+    return c.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Image parsing failed";
     return c.json({ error: message }, 502);
   }
 });

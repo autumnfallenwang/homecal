@@ -96,8 +96,8 @@
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 44 | Quick Add popover | Not started | Refactor header: remove inline smart input/voice, single "+ Add" button → popover with text input + mic, image upload, .ics import, manual create |
-| 45 | Image input — backend + frontend | Not started | `POST /api/events/parse-image` — send image to vision LLM, return parsed event. Upload area in Quick Add popover (jpg/png/heic), preview, pre-fill EventDialog |
+| 44 | Quick Add popover | ✅ Done | Refactored header: removed inline smart input/voice, single "+ Add" button opens shadcn Popover with text input + mic + sparkles, image upload placeholder, .ics import placeholder, "create manually" link. Auto-closes on successful parse. |
+| 45 | Image input — backend + frontend | ✅ Done | `POST /api/events/parse-image` with vision LLM (Haiku + Gemma fallback), `callLlmWithImage` + `buildImageParsePrompt` in llm.ts, image upload in Quick Add popover (jpg/png/webp/heic), thumbnail preview, pre-fills EventDialog. 14 new unit tests. |
 
 ## Phase 12: iCalendar Import/Export
 
@@ -118,7 +118,7 @@
 ## What's Working
 
 - Monorepo: `apps/api` (Hono, port 3001), `apps/web` (Next.js, port 3000), `apps/ios` (SwiftUI), `packages/shared`
-- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (112 unit tests + 123 integration tests; 13 Swift tests)
+- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (126 unit tests + 123 integration tests; 13 Swift tests)
 - Docker PostgreSQL: `scripts/db-start.sh` / `db-stop.sh` / `db-reset.sh`
 - Auth: signup, signin, signout, session check, admin plugin, bearer token plugin, `requireAuth` middleware (cookies + bearer)
 - Events CRUD: 5 endpoints with visibility rules, Zod validation, change logging, date range filtering
@@ -127,7 +127,7 @@
 - Calendar month view: 42-cell grid (Mon start), event pills colored by first assignee, member filter sidebar (filters by assignee), prev/next nav
 - Calendar week view: 24-hour scrollable grid, month/week toggle, click-to-create, overlap handling, event blocks colored by first assignee
 - Event create/edit/delete: unified EventDialog with inline confirmation, change log history, multi-select assignee picker, email reminder presets (15min/1hr/1day toggle buttons)
-- Smart input: `POST /api/events/parse` with LLM service, CalendarHeader text input, Haiku default + Gemma fallback
+- Smart input: `POST /api/events/parse` (text) + `POST /api/events/parse-image` (image) with LLM service, Haiku default + Gemma fallback, accessed via Quick Add popover (text, voice, image upload)
 - Event assignees: `event_assignees` join table with unique (eventId, userId) constraint, cascade deletes, existing events backfilled with owner as assignee; all CRUD endpoints return `assignees: [{ id, name, color }]`, create defaults owner as assignee, PATCH replaces assignees, changes logged in event history
 - Reminders: `event_reminders` table (eventId, minutesBefore, channel) with unique constraint, CRUD at `/api/events/:id/reminders`, events API includes reminders with channel in responses
 - Device tokens: `device_tokens` table (userId, platform, token) with upsert, `/api/devices` registration/unregistration, tokens persist beyond session expiry for push notifications
@@ -149,7 +149,7 @@
 
 ## What's Next
 
-Phase 10 (Web Voice Input) complete. Next up: Phase 11 (Unified Quick Add + Image Input) — tasks 44–45, then Phase 12 (iCalendar Import/Export) — tasks 46–48.
+Phase 11 (Unified Quick Add + Image Input) complete. Next up: Phase 12 (iCalendar Import/Export) — task 46.
 
 ## Reference Docs
 

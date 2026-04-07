@@ -40,6 +40,7 @@ export default function HomePage() {
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
   const [parsedEvent, setParsedEvent] = useState<ParsedEvent | null>(null);
   const [smartInputLoading, setSmartInputLoading] = useState(false);
+  const [imageInputLoading, setImageInputLoading] = useState(false);
 
   const gridDates = useMemo(() => getMonthGridDates(year, month), [year, month]);
   const weekDates = useMemo(() => getWeekDates(weekAnchor), [weekAnchor]);
@@ -149,7 +150,7 @@ export default function HomePage() {
     [members],
   );
 
-  const handleSmartInput = useCallback(async (text: string) => {
+  const handleSmartInput = useCallback(async (text: string): Promise<boolean> => {
     setSmartInputLoading(true);
     try {
       const res = await fetch("/api/events/parse", {
@@ -169,12 +170,46 @@ export default function HomePage() {
         assigneeIds: data.assigneeIds,
       });
       setDialogDate(new Date());
+      return true;
     } catch (err) {
       console.error("Smart input error:", err);
+      return false;
     } finally {
       setSmartInputLoading(false);
     }
   }, []);
+
+  const handleImageInput = useCallback(
+    async (image: string, mimeType: string): Promise<boolean> => {
+      setImageInputLoading(true);
+      try {
+        const res = await fetch("/api/events/parse-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ image, mimeType }),
+        });
+        if (!res.ok) throw new Error("Image parse failed");
+        const data = await res.json();
+        setParsedEvent({
+          title: data.title,
+          location: data.location,
+          description: data.description,
+          start: data.start,
+          end: data.end,
+          assigneeIds: data.assigneeIds,
+        });
+        setDialogDate(new Date());
+        return true;
+      } catch (err) {
+        console.error("Image input error:", err);
+        return false;
+      } finally {
+        setImageInputLoading(false);
+      }
+    },
+    [],
+  );
 
   const handleNewEvent = useCallback(() => {
     setDialogDate(new Date());
@@ -214,7 +249,9 @@ export default function HomePage() {
         onViewChange={handleViewChange}
         onNewEvent={handleNewEvent}
         onSmartInput={handleSmartInput}
+        onImageInput={handleImageInput}
         smartInputLoading={smartInputLoading}
+        imageInputLoading={imageInputLoading}
       />
       <div className="flex flex-1 overflow-hidden">
         <aside className="hidden w-60 border-r p-4 lg:block">
