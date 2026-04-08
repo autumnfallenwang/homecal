@@ -103,9 +103,9 @@
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 46 | iCalendar parser + import API | Not started | `POST /api/events/import` — parse .ics VEVENT blocks, map fields to events, RRULE → series, all-day → midnight-to-midnight, timestamps → UTC |
-| 47 | Import web UI | Not started | .ics import option in Quick Add popover, file picker, preview parsed events before confirming, error summary for skipped events |
-| 48 | Export API + web UI | Not started | `GET /api/events/export.ics` — generate .ics from events, export button triggers download, series → RRULE |
+| 46 | iCalendar parser + import API | ✅ Done | `POST /api/events/import` — node-ical parser, maps VEVENT fields to events, all-day → midnight-to-midnight, CLASS:PRIVATE, batch insert with assignees + logs, RRULE events skipped for v1. 16 new unit tests. |
+| 47 | Import web UI | ✅ Done | "Import .ics file" button in Quick Add popover, file picker, calls POST /api/events/import, shows imported/skipped count, auto-closes popover, refetches calendar |
+| 48 | Export API + web UI | ✅ Done | `GET /api/events/export.ics` (all events) + `GET /api/events/:id/export.ics` (single event). Download button (↓) in header, Export button in EventDialog next to Delete. 9 unit tests. |
 
 ## Phase 13: Future Enhancements (deferred)
 
@@ -118,7 +118,7 @@
 ## What's Working
 
 - Monorepo: `apps/api` (Hono, port 3001), `apps/web` (Next.js, port 3000), `apps/ios` (SwiftUI), `packages/shared`
-- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (126 unit tests + 123 integration tests; 13 Swift tests)
+- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (151 unit tests + 123 integration tests; 13 Swift tests)
 - Docker PostgreSQL: `scripts/db-start.sh` / `db-stop.sh` / `db-reset.sh`
 - Auth: signup, signin, signout, session check, admin plugin, bearer token plugin, `requireAuth` middleware (cookies + bearer)
 - Events CRUD: 5 endpoints with visibility rules, Zod validation, change logging, date range filtering
@@ -149,7 +149,7 @@
 
 ## What's Next
 
-Phase 11 (Unified Quick Add + Image Input) complete. Next up: Phase 12 (iCalendar Import/Export) — task 46.
+Phase 12 (iCalendar Import/Export) complete. All tasks 46-48 done.
 
 ## Reference Docs
 

@@ -950,14 +950,25 @@ export function EventDialog({
                     </Button>
                   </>
                 ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => setConfirmingDelete(true)}
-                  >
-                    Delete
-                  </Button>
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setConfirmingDelete(true)}
+                    >
+                      Delete
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        if (event) window.location.href = `/api/events/${event.id}/export.ics`;
+                      }}
+                    >
+                      Export
+                    </Button>
+                  </>
                 )}
               </div>
             )}

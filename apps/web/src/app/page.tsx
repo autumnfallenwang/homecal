@@ -211,6 +211,22 @@ export default function HomePage() {
     [],
   );
 
+  const handleIcsImport = useCallback(
+    async (icsData: string): Promise<{ imported: number; skipped: number }> => {
+      const res = await fetch("/api/events/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ icsData }),
+      });
+      if (!res.ok) throw new Error("Import failed");
+      const data = await res.json();
+      refetch();
+      return { imported: data.imported, skipped: data.skipped };
+    },
+    [refetch],
+  );
+
   const handleNewEvent = useCallback(() => {
     setDialogDate(new Date());
   }, []);
@@ -250,6 +266,7 @@ export default function HomePage() {
         onNewEvent={handleNewEvent}
         onSmartInput={handleSmartInput}
         onImageInput={handleImageInput}
+        onIcsImport={handleIcsImport}
         smartInputLoading={smartInputLoading}
         imageInputLoading={imageInputLoading}
       />

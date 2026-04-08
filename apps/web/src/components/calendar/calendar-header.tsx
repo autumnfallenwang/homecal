@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, LogOut, Settings, ShieldCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, LogOut, Settings, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { useTheme } from "@/components/theme-provider";
@@ -31,6 +31,7 @@ interface CalendarHeaderProps {
   onNewEvent?: () => void;
   onSmartInput?: (text: string) => Promise<boolean>;
   onImageInput?: (image: string, mimeType: string) => Promise<boolean>;
+  onIcsImport?: (icsData: string) => Promise<{ imported: number; skipped: number }>;
   onProfileSaved?: () => void;
   smartInputLoading?: boolean;
   imageInputLoading?: boolean;
@@ -49,6 +50,7 @@ export function CalendarHeader({
   onNewEvent,
   onSmartInput,
   onImageInput,
+  onIcsImport,
   onProfileSaved,
   smartInputLoading = false,
   imageInputLoading = false,
@@ -163,16 +165,27 @@ export function CalendarHeader({
 
       {/* Right: quick add + user + sign out */}
       <div className="flex items-center gap-2">
-        {onSmartInput && onImageInput && onNewEvent && (
+        {onSmartInput && onImageInput && onIcsImport && onNewEvent && (
           <QuickAddPopover
             onSmartInput={onSmartInput}
             onImageInput={onImageInput}
+            onIcsImport={onIcsImport}
             smartInputLoading={smartInputLoading}
             imageInputLoading={imageInputLoading}
             onNewEvent={onNewEvent}
           />
         )}
         <span className="text-sm text-muted-foreground">{userName}</span>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => {
+            window.location.href = "/api/events/export.ics";
+          }}
+          title="Export .ics"
+        >
+          <Download className="h-4 w-4" />
+        </Button>
         <Button variant="ghost" size="icon-sm" onClick={openProfile} title="Settings">
           <Settings className="h-4 w-4" />
         </Button>

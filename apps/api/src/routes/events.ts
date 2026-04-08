@@ -1,6 +1,7 @@
 import {
   createEventSchema,
   eventQuerySchema,
+  importIcsSchema,
   parseEventInputSchema,
   parseImageInputSchema,
   updateEventSchema,
@@ -11,6 +12,8 @@ import type { auth } from "../auth.js";
 import { db } from "../db/index.js";
 import { eventAssignees, eventLogs, events, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
+import { generateIcs } from "../services/ics-generator.js";
+import { parseIcsEvents } from "../services/ics-parser.js";
 import {
   buildImageParsePrompt,
   buildParsePrompt,
@@ -116,6 +119,94 @@ eventsApp.post("/parse-image", async (c) => {
     const message = error instanceof Error ? error.message : "Image parsing failed";
     return c.json({ error: message }, 502);
   }
+});
+
+// POST /import — Import events from .ics file
+eventsApp.post("/import", async (c) => {
+  const body = await c.req.json();
+  const parsed = importIcsSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.issues }, 400);
+  }
+
+  const userId = c.get("user").id;
+  const { events: parsedEvents, skipped } = parseIcsEvents(parsed.data.icsData);
+
+  if (parsedEvents.length === 0) {
+    return c.json({ imported: 0, skipped, events: [] });
+  }
+
+  // Batch insert events
+  const insertedEvents = await db
+    .insert(events)
+    .values(
+      parsedEvents.map((e) => ({
+        title: e.title,
+        location: e.location || null,
+        description: e.description || null,
+        start: new Date(e.start),
+        end: new Date(e.end),
+        private: e.isPrivate,
+        ownerId: userId,
+      })),
+    )
+    .returning();
+
+  // Batch insert assignees (owner = default assignee for each event)
+  if (insertedEvents.length > 0) {
+    await db.insert(eventAssignees).values(insertedEvents.map((e) => ({ eventId: e.id, userId })));
+
+    // Log creation for shared events
+    const sharedEvents = insertedEvents.filter((e) => !e.private);
+    if (sharedEvents.length > 0) {
+      await db.insert(eventLogs).values(
+        sharedEvents.map((e) => ({
+          eventId: e.id,
+          userId,
+          action: "created",
+          changes: { source: "ics-import" },
+        })),
+      );
+    }
+  }
+
+  return c.json({
+    imported: insertedEvents.length,
+    skipped,
+    events: insertedEvents,
+  });
+});
+
+// GET /export.ics — Export events as iCalendar file
+eventsApp.get("/export.ics", async (c) => {
+  const query = Object.fromEntries(new URL(c.req.url).searchParams);
+  const parsed = eventQuerySchema.safeParse(query);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.issues }, 400);
+  }
+
+  const userId = c.get("user").id;
+  const { from, to } = parsed.data;
+
+  const conditions = [
+    or(eq(events.private, false), and(eq(events.private, true), eq(events.ownerId, userId))),
+  ];
+  if (from) conditions.push(gte(events.start, new Date(from)));
+  if (to) conditions.push(lte(events.start, new Date(to)));
+
+  const result = await db.query.events.findMany({
+    where: and(...conditions),
+    orderBy: events.start,
+  });
+
+  const icsContent = generateIcs(result);
+
+  return new Response(icsContent, {
+    headers: {
+      "Content-Type": "text/calendar; charset=utf-8",
+      "Content-Disposition": 'attachment; filename="homecal-export.ics"',
+    },
+  });
 });
 
 // POST / — Create event
@@ -242,6 +333,29 @@ eventsApp.get("/:id", async (c) => {
       minutesBefore: r.minutesBefore,
       channel: r.channel,
     })),
+  });
+});
+
+// GET /:id/export.ics — Export single event as iCalendar file
+eventsApp.get("/:id/export.ics", async (c) => {
+  const id = c.req.param("id");
+  const userId = c.get("user").id;
+
+  const result = await db.query.events.findFirst({
+    where: eq(events.id, id),
+  });
+
+  if (!result || (result.private && result.ownerId !== userId)) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  const icsContent = generateIcs([result]);
+
+  return new Response(icsContent, {
+    headers: {
+      "Content-Type": "text/calendar; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${result.title.replace(/[^a-zA-Z0-9 ]/g, "")}.ics"`,
+    },
   });
 });
 

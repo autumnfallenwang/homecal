@@ -6,9 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
+interface IcsImportResult {
+  imported: number;
+  skipped: number;
+}
+
 interface QuickAddPopoverProps {
   onSmartInput: (text: string) => Promise<boolean>;
   onImageInput: (image: string, mimeType: string) => Promise<boolean>;
+  onIcsImport: (icsData: string) => Promise<IcsImportResult>;
   smartInputLoading: boolean;
   imageInputLoading: boolean;
   onNewEvent: () => void;
@@ -17,6 +23,7 @@ interface QuickAddPopoverProps {
 export function QuickAddPopover({
   onSmartInput,
   onImageInput,
+  onIcsImport,
   smartInputLoading,
   imageInputLoading,
   onNewEvent,
@@ -25,9 +32,12 @@ export function QuickAddPopover({
   const [smartText, setSmartText] = useState("");
   const [listening, setListening] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [icsLoading, setIcsLoading] = useState(false);
+  const [icsResult, setIcsResult] = useState<IcsImportResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const icsInputRef = useRef<HTMLInputElement>(null);
 
-  const isLoading = smartInputLoading || imageInputLoading;
+  const isLoading = smartInputLoading || imageInputLoading || icsLoading;
 
   async function handleSmartSubmit() {
     const trimmed = smartText.trim();
@@ -109,6 +119,36 @@ export function QuickAddPopover({
     setImagePreview(null);
     if (success) {
       setOpen(false);
+    }
+  }
+
+  function handleIcsClick() {
+    icsInputRef.current?.click();
+  }
+
+  async function handleIcsSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    const text = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.readAsText(file);
+    });
+
+    setIcsLoading(true);
+    try {
+      const result = await onIcsImport(text);
+      setIcsResult(result);
+      setTimeout(() => {
+        setIcsResult(null);
+        setOpen(false);
+      }, 2000);
+    } catch {
+      setIcsResult(null);
+    } finally {
+      setIcsLoading(false);
     }
   }
 
@@ -195,14 +235,33 @@ export function QuickAddPopover({
             </div>
           )}
 
+          <input
+            ref={icsInputRef}
+            type="file"
+            accept=".ics"
+            className="hidden"
+            onChange={handleIcsSelect}
+          />
           <button
             type="button"
-            disabled
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground opacity-50"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent disabled:opacity-50"
+            onClick={handleIcsClick}
+            disabled={isLoading}
           >
-            <FileText className="h-4 w-4" />
-            Import .ics file
+            {icsLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+            {icsLoading ? "Importing..." : "Import .ics file"}
           </button>
+
+          {icsResult && (
+            <p className="mt-1 px-2 text-xs text-muted-foreground">
+              Imported {icsResult.imported} event{icsResult.imported !== 1 ? "s" : ""}.
+              {icsResult.skipped > 0 && ` ${icsResult.skipped} recurring skipped.`}
+            </p>
+          )}
         </div>
 
         <div className="my-2 border-t" />
