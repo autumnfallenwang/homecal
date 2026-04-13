@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./auth.js";
 import { requireAuth } from "./middleware/auth.js";
+import { adminApp } from "./routes/admin.js";
 import { devicesApp } from "./routes/devices.js";
 import { eventsApp } from "./routes/events.js";
 import { remindersApp } from "./routes/reminders.js";
@@ -32,6 +33,7 @@ app.route("/api/events/:eventId/reminders", remindersApp);
 app.route("/api/users", usersApp);
 app.route("/api/series", seriesApp);
 app.route("/api/devices", devicesApp);
+app.route("/api/admin", adminApp);
 
 // Example protected route (used by integration tests)
 app.get("/protected-test", requireAuth, (c) => {
