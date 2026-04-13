@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarHeader } from "@/components/calendar/calendar-header";
 import { DayGrid } from "@/components/calendar/day-grid";
 import { EmptyCalendar } from "@/components/calendar/empty-calendar";
@@ -8,6 +8,7 @@ import { EventDialog, type ParsedEvent } from "@/components/calendar/event-dialo
 import { MemberFilter } from "@/components/calendar/member-filter";
 import { MonthGrid } from "@/components/calendar/month-grid";
 import { MonthGridSkeleton } from "@/components/calendar/month-grid-skeleton";
+import { TodayView } from "@/components/calendar/today-view";
 import { WeekGrid } from "@/components/calendar/week-grid";
 import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 import { type CalendarEvent, useEvents } from "@/hooks/use-events";
@@ -31,9 +32,21 @@ function currentYearMonth() {
   return { year: now.getFullYear(), month: now.getMonth() };
 }
 
+type CalendarView = "today" | "month" | "week" | "day";
+const VIEW_STORAGE_KEY = "homecal:view";
+
+function loadInitialView(): CalendarView {
+  if (typeof window === "undefined") return "today";
+  const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
+  if (stored === "today" || stored === "month" || stored === "week" || stored === "day") {
+    return stored;
+  }
+  return "today";
+}
+
 export default function HomePage() {
   const { session, isPending } = useAuthRedirect(true);
-  const [view, setView] = useState<"month" | "week" | "day">("month");
+  const [view, setView] = useState<CalendarView>(loadInitialView);
   const [{ year, month }, setYearMonth] = useState(currentYearMonth);
   const [weekAnchor, setWeekAnchor] = useState(() => new Date());
   const [dayAnchor, setDayAnchor] = useState(() => new Date());
@@ -48,12 +61,14 @@ export default function HomePage() {
   const weekDates = useMemo(() => getWeekDates(weekAnchor), [weekAnchor]);
 
   const from = useMemo(() => {
+    if (view === "today") return "";
     if (view === "month") return getGridStart(gridDates);
     if (view === "week") return getWeekStart(weekDates);
     return getDayStart(dayAnchor);
   }, [view, gridDates, weekDates, dayAnchor]);
 
   const to = useMemo(() => {
+    if (view === "today") return "";
     if (view === "month") return getGridEnd(gridDates);
     if (view === "week") return getWeekEnd(weekDates);
     return getDayEnd(dayAnchor);
@@ -104,7 +119,9 @@ export default function HomePage() {
     setDayAnchor((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 1));
   }, []);
 
-  const navHandlers = {
+  const noop = useCallback(() => {}, []);
+  const navHandlers: Record<CalendarView, { prev: () => void; next: () => void }> = {
+    today: { prev: noop, next: noop },
     month: { prev: handlePrevMonth, next: handleNextMonth },
     week: { prev: handlePrevWeek, next: handleNextWeek },
     day: { prev: handlePrevDay, next: handleNextDay },
@@ -118,34 +135,49 @@ export default function HomePage() {
       setYearMonth({ year: now.getFullYear(), month: now.getMonth() });
     } else if (view === "week") {
       setWeekAnchor(now);
-    } else {
+    } else if (view === "day") {
       setDayAnchor(now);
     }
   }, [view]);
 
-  const headerTitles = {
-    month: formatMonthYear(year, month),
-    week: formatWeekRange(weekDates),
-    day: formatDayTitle(dayAnchor),
-  };
-  const headerTitle = headerTitles[view];
+  const handleJumpToTomorrow = useCallback(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    setDayAnchor(tomorrow);
+    setView("day");
+  }, []);
+
+  let headerTitle = "Today";
+  if (view === "month") headerTitle = formatMonthYear(year, month);
+  else if (view === "week") headerTitle = formatWeekRange(weekDates);
+  else if (view === "day") headerTitle = formatDayTitle(dayAnchor);
 
   const handleViewChange = useCallback(
-    (newView: "month" | "week" | "day") => {
+    (newView: CalendarView) => {
       if (newView === view) return;
       if (newView === "week") {
         setWeekAnchor(view === "day" ? dayAnchor : new Date());
       } else if (newView === "day") {
         setDayAnchor(view === "week" ? weekAnchor : new Date());
-      } else {
+      } else if (newView === "month") {
         // month — derive from current anchor
         const anchor = view === "week" ? weekAnchor : dayAnchor;
         setYearMonth({ year: anchor.getFullYear(), month: anchor.getMonth() });
       }
       setView(newView);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(VIEW_STORAGE_KEY, newView);
+      }
     },
     [view, weekAnchor, dayAnchor],
   );
+
+  // Persist view whenever it changes (e.g., via handleToday or future mutations).
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+    }
+  }, [view]);
 
   const handleToggleMember = useCallback(
     (memberId: string) => {
@@ -305,6 +337,15 @@ export default function HomePage() {
           />
         </aside>
         <main className="flex flex-1 overflow-auto p-4">
+          {view === "today" && (
+            <TodayView
+              currentUserId={session.user.id}
+              members={members}
+              onEventClick={handleEventClick}
+              onNewEvent={handleNewEvent}
+              onJumpToTomorrow={handleJumpToTomorrow}
+            />
+          )}
           {view === "month" && eventsLoading && events.length === 0 && <MonthGridSkeleton />}
           {view === "month" && !eventsLoading && filteredEvents.length === 0 && (
             <EmptyCalendar onNewEvent={handleNewEvent} />

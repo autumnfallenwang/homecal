@@ -30,6 +30,16 @@ export const eventQuerySchema = z.object({
   to: z.iso.datetime().optional(),
 });
 
+// IANA timezone format — "UTC", "America/Los_Angeles", "Pacific/Kiritimati", etc.
+// Runtime validation happens via Intl.DateTimeFormat which throws on unknown zones;
+// this regex just blocks obviously malformed input.
+const IANA_TZ_REGEX = /^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z][A-Za-z0-9_+-]*)*$/;
+
+export const todayQuerySchema = z.object({
+  tz: z.string().min(1).max(64).regex(IANA_TZ_REGEX, "Invalid IANA timezone"),
+  userIds: z.string().max(4096).optional(),
+});
+
 export const parseEventInputSchema = z.object({
   text: z.string().min(1).max(500),
 });
@@ -67,6 +77,7 @@ export const registerDeviceSchema = z.object({
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type EventQuery = z.infer<typeof eventQuerySchema>;
+export type TodayQuery = z.infer<typeof todayQuerySchema>;
 export type ParseEventInput = z.infer<typeof parseEventInputSchema>;
 export type ImportIcsInput = z.infer<typeof importIcsSchema>;
 export type ParseImageInput = z.infer<typeof parseImageInputSchema>;

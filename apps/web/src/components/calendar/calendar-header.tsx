@@ -43,7 +43,7 @@ import { QuickAddPopover } from "./quick-add-popover";
 
 interface CalendarHeaderProps {
   title: string;
-  view: "month" | "week" | "day";
+  view: "today" | "month" | "week" | "day";
   userName: string;
   userEmail?: string;
   userColor?: string;
@@ -51,7 +51,7 @@ interface CalendarHeaderProps {
   onPrev: () => void;
   onNext: () => void;
   onToday?: () => void;
-  onViewChange: (view: "month" | "week" | "day") => void;
+  onViewChange: (view: "today" | "month" | "week" | "day") => void;
   onNewEvent?: () => void;
   onSmartInput?: (text: string) => Promise<boolean>;
   onImageInput?: (image: string, mimeType: string) => Promise<boolean>;
@@ -158,7 +158,7 @@ export function CalendarHeader({
     if (icsInputRef.current) icsInputRef.current.value = "";
   };
 
-  const segButton = (value: "month" | "week" | "day", label: string) => (
+  const segButton = (value: "today" | "month" | "week" | "day", label: string) => (
     <button
       type="button"
       onClick={() => onViewChange(value)}
@@ -171,6 +171,8 @@ export function CalendarHeader({
       {label}
     </button>
   );
+
+  const isTodayView = view === "today";
 
   return (
     <header className="border-b">
@@ -275,41 +277,44 @@ export function CalendarHeader({
 
         <div className="flex items-center gap-2">
           <div className="inline-flex items-center gap-0.5 rounded-full border bg-background p-0.5">
+            {segButton("today", "Today")}
             {segButton("day", "Day")}
             {segButton("week", "Week")}
             {segButton("month", "Month")}
           </div>
 
-          <div className="inline-flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onPrev}
-              className="rounded-full"
-              aria-label="Previous"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            {onToday && (
+          {!isTodayView && (
+            <div className="inline-flex items-center gap-1">
               <Button
-                variant="outline"
-                size="sm"
-                onClick={onToday}
-                className="font-display italic text-sm rounded-full px-4"
+                variant="ghost"
+                size="icon-sm"
+                onClick={onPrev}
+                className="rounded-full"
+                aria-label="Previous"
               >
-                Today
+                <ChevronLeft className="h-4 w-4" />
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onNext}
-              className="rounded-full"
-              aria-label="Next"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+              {onToday && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onToday}
+                  className="font-display italic text-sm rounded-full px-4"
+                >
+                  Today
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={onNext}
+                className="rounded-full"
+                aria-label="Next"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
 
           {onSmartInput && onImageInput && onIcsImport && onNewEvent && (
             <QuickAddPopover

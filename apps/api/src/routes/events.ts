@@ -4,9 +4,10 @@ import {
   importIcsSchema,
   parseEventInputSchema,
   parseImageInputSchema,
+  todayQuerySchema,
   updateEventSchema,
 } from "@homecal/shared";
-import { and, desc, eq, gte, lte, or } from "drizzle-orm";
+import { and, desc, eq, gt, gte, lt, lte, or } from "drizzle-orm";
 import { Hono } from "hono";
 import type { auth } from "../auth.js";
 import { db } from "../db/index.js";
@@ -21,6 +22,7 @@ import {
   callLlmWithImage,
   parseLlmResponse,
 } from "../services/llm.js";
+import { computeLocalDayWindows, eventOverlapsWindow } from "../services/today.js";
 
 type Session = typeof auth.$Infer.Session;
 
@@ -303,6 +305,94 @@ eventsApp.get("/", async (c) => {
   });
 
   return c.json(shaped);
+});
+
+// GET /today — Timezone-aware snapshot for the Today view
+eventsApp.get("/today", async (c) => {
+  const query = Object.fromEntries(new URL(c.req.url).searchParams);
+  const parsed = todayQuerySchema.safeParse(query);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.issues }, 400);
+  }
+
+  const { tz, userIds } = parsed.data;
+  const userIdFilter = userIds
+    ? new Set(
+        userIds
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      )
+    : null;
+
+  // Compute local-day windows; return 400 on invalid IANA zone.
+  let windows: ReturnType<typeof computeLocalDayWindows>;
+  try {
+    windows = computeLocalDayWindows(tz);
+  } catch {
+    return c.json({ error: "Invalid timezone" }, 400);
+  }
+  const { todayStart, todayEnd, tomorrowStart, tomorrowEnd } = windows;
+
+  const requesterId = c.get("user").id;
+
+  // Fetch everything overlapping [todayStart, tomorrowEnd) in one query.
+  const raw = await db.query.events.findMany({
+    where: and(
+      or(eq(events.private, false), and(eq(events.private, true), eq(events.ownerId, requesterId))),
+      lt(events.start, tomorrowEnd),
+      gt(events.end, todayStart),
+    ),
+    orderBy: events.start,
+    with: { assignees: { with: { user: true } }, reminders: true },
+  });
+
+  // Assignee filter: keep events with at least one assignee in the set.
+  const matchesUserFilter = (e: (typeof raw)[number]) => {
+    if (!userIdFilter) return true;
+    return e.assignees.some((a) => userIdFilter.has(a.user.id));
+  };
+
+  const todayEvents = raw.filter((e) => {
+    const s = new Date(e.start);
+    const en = new Date(e.end);
+    return eventOverlapsWindow(s, en, todayStart, todayEnd) && matchesUserFilter(e);
+  });
+
+  const tomorrowEvents = raw.filter((e) => {
+    const s = new Date(e.start);
+    const en = new Date(e.end);
+    return eventOverlapsWindow(s, en, tomorrowStart, tomorrowEnd) && matchesUserFilter(e);
+  });
+
+  const hasMultiDayStart = tomorrowEvents.some((e) => {
+    const s = new Date(e.start).getTime();
+    const en = new Date(e.end).getTime();
+    return s < tomorrowStart.getTime() || en > tomorrowEnd.getTime();
+  });
+
+  const shape = (e: (typeof raw)[number]) => {
+    const { assignees: rawAssignees, reminders: rawReminders, ...rest } = e;
+    return {
+      ...rest,
+      assignees: formatAssignees(rawAssignees),
+      reminders: rawReminders.map((r) => ({
+        id: r.id,
+        minutesBefore: r.minutesBefore,
+        channel: r.channel,
+      })),
+    };
+  };
+
+  return c.json({
+    serverNow: new Date().toISOString(),
+    today: todayEvents.map(shape),
+    tomorrow: {
+      count: tomorrowEvents.length,
+      firstTitle: tomorrowEvents[0]?.title ?? null,
+      hasMultiDayStart,
+    },
+  });
 });
 
 // GET /:id — Get single event
