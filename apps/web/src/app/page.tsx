@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarHeader } from "@/components/calendar/calendar-header";
 import { DayGrid } from "@/components/calendar/day-grid";
-import { EmptyCalendar } from "@/components/calendar/empty-calendar";
 import { EventDialog, type ParsedEvent } from "@/components/calendar/event-dialog";
 import { MemberFilter } from "@/components/calendar/member-filter";
 import { MonthGrid } from "@/components/calendar/month-grid";
@@ -148,7 +147,8 @@ export default function HomePage() {
   }, []);
 
   let headerTitle = "Today";
-  if (view === "month") headerTitle = formatMonthYear(year, month);
+  // Insert a comma before the year so the shared header renderer can accent it.
+  if (view === "month") headerTitle = formatMonthYear(year, month).replace(" ", ", ");
   else if (view === "week") headerTitle = formatWeekRange(weekDates);
   else if (view === "day") headerTitle = formatDayTitle(dayAnchor);
 
@@ -347,10 +347,7 @@ export default function HomePage() {
             />
           )}
           {view === "month" && eventsLoading && events.length === 0 && <MonthGridSkeleton />}
-          {view === "month" && !eventsLoading && filteredEvents.length === 0 && (
-            <EmptyCalendar onNewEvent={handleNewEvent} />
-          )}
-          {view === "month" && (eventsLoading ? events.length > 0 : filteredEvents.length > 0) && (
+          {view === "month" && (!eventsLoading || events.length > 0) && (
             <MonthGrid
               year={year}
               month={month}

@@ -364,10 +364,57 @@ Pre-existing issues on `main` that blocked the Phase 13–15 round from being de
     - **`apps/api/tests/events/series.integration.test.ts`**: the Phase 9 task 40 FK `events.seriesId → series.id` was added after these tests were written; they were inserting events pointing at synthetic `randomUUID()` seriesIds and hitting the FK constraint. Add a `createSeries()` helper that inserts a real series row + add `schema.series` to the `beforeEach` cleanup list; the 3 non-existent-series 404 tests keep a hardcoded zero UUID. Fixes 5 failing tests.
     - **Verification**: `pnpm lint` clean, `pnpm build` clean for both @homecal/api and @homecal/web, `pnpm --filter @homecal/api test` 25 files / 345 passing (was 24/340).
 
-### Phase 16 — Future Enhancements (deferred)
+### Phase 16 — Multi-app API: open HomeCal as a shared service
+HomeCal's backend is already a real HTTP service (Hono + Drizzle + Postgres + Better Auth with cookie + bearer plugins). Before other "home apps" can call into it safely, four things need to be in place: proper machine-auth, per-caller rate limiting, API versioning so we can evolve without breaking consumers, and self-documenting OpenAPI so the other apps can generate typed clients.
+
+**Ordering rationale**: API keys first (blocks real machine callers), then rate limit (protects once keys exist), then versioning (locks the schema before we publish it), then OpenAPI (snapshots the locked schema).
+
+70. API key plugin — enable Better Auth's first-party `apiKey` plugin from `better-auth/plugins`. Adds an `api_keys` table with rotation + revocation semantics. New routes (admin-only): `POST /api/admin/api-keys` (create — returns plaintext once), `GET /api/admin/api-keys` (list with masked values), `DELETE /api/admin/api-keys/:id` (revoke). Update `requireAuth` middleware to accept an `x-api-key` header in addition to cookies + bearer, resolving to the owning user so existing role checks (including `requireAdmin`) just work. Shared Zod schemas in `packages/shared`. Unit + integration tests: create/list/revoke, expired key rejection, admin-scoped key passes `requireAdmin`, regular-scoped key fails it. Document the "create one service user per calling app" pattern in `docs/lessons.md`.
+
+71. Rate limiting — add `hono-rate-limiter` as a middleware applied to `/api/*` with a per-caller key that prefers `x-api-key` value, falling back to session user id, then IP address. Defaults: 600 req/min per key, burst of 60 req/sec. Configurable via `RATE_LIMIT_PER_MIN` env var. Returns `429` with a `Retry-After` header. Short-circuit admin calls at 1200 req/min to avoid throttling the web UI. Unit test: helper that extracts the rate-limit key. Integration test: 600 sequential calls pass, 601st returns 429.
+
+72. API versioning — introduce a `/api/v1` prefix. Keep the legacy `/api/*` mounts temporarily so existing web + iOS clients don't break, emitting a `Deprecation` + `Sunset` header on legacy routes. Web + iOS clients stay on `/api/*` for now; migrate them in a follow-up (task 73a) once v1 is stable. Write a short `docs/api-versioning.md` documenting the policy: breaking changes require a new version; additive changes (new fields, new endpoints) go on the current version. Update `apps/api/src/app.ts` to mount under both prefixes. Integration test verifying both `/api/events` and `/api/v1/events` return identical payloads, plus a header assertion on the legacy path.
+
+73. OpenAPI + Swagger UI — add `@hono/zod-openapi` + `@hono/swagger-ui`. Migrate each route group (`events`, `series`, `reminders`, `users`, `devices`, `admin`) from plain `new Hono()` + handler callbacks to `new OpenAPIHono()` + `createRoute({ method, path, request, responses })`. Every existing shared Zod schema gets `.openapi({ description, example })` annotations in `packages/shared/src/index.ts`. Mount `/api/docs` (Swagger UI) and `/api/openapi.json` (spec) — admin-gated in prod, open in dev. Verification: hit `/api/openapi.json`, round-trip through `openapi-typescript` to generate a client, run a smoke call against one endpoint.
+
+**Not in scope for Phase 16** (explicitly deferred):
+- Migrating web + iOS clients off `/api/*` onto `/api/v1/*` — tracked as a later task once v1 is proven.
+- OAuth / external-app delegated auth (e.g. another family's HomeCal talking to ours). API keys cover internal apps; OAuth is a different problem.
+- Webhook outbound events (HomeCal → other apps). Polling works for now.
+
+### Phase 17 — National holidays (multi-country, read-only layer)
+Follows the universal calendar-app pattern: holidays are a **separate, read-only layer**, not mixed into the user's events. Backed by the pure-JS `date-holidays` npm package (MIT, 200+ countries, zero network calls) so there's no DB storage, no sync job, and no admin UI — holidays are computed on-the-fly from `(country, year)` at request time.
+
+**Scope for v1**:
+- Public holidays only (`date-holidays` `type: "public"`). Observances like Halloween / Mother's Day deferred to a later phase.
+- Multi-country from day one — a family can enable e.g. US + TW + UK simultaneously.
+- Read-only: no edit, no delete, no assignees, not counted in event counts or member filters.
+
+**Visual treatment — "kicker line"** (locked):
+- Small Fraunces italic lowercase text above the date numeral with a terracotta `·` dot prefix (e.g. `·  memorial day`). No background pill, no country flag — pure typography.
+- Multi-country dedupes to one line with `·` separators (`·  memorial day · 陣亡將士紀念日`).
+- Month grid: positioned above the numeral, truncates on narrow cells, absolute-positioned so it doesn't eat into the 3-pill cell budget.
+- Week/Day view: same kicker at the top of each day column.
+- Today view: inline between the weekday label and the massive date hero.
+- Click → existing `EventDetailPopover` in a new `readOnly` mode (title, country, type, no Edit button).
+
+Why not a ribbon/pill: too AI-default. Italic kicker + terracotta dot is typographic-forward, matches the rest of Warm Editorial, and avoids competing with event pills for cell space.
+
+74. Holidays service + endpoint — add `date-holidays` as an `@homecal/api` dependency. New `apps/api/src/services/holidays.ts` with `getHolidays({ countries, from, to })` that iterates year ranges, filters `type === "public"`, dedupes by `date|title` across countries, and returns `[{ date, title, country, type }]`. New route `GET /api/holidays?countries=US,TW&from=...&to=...` with shared Zod schema (comma-separated countries, ISO date range). Response is cached per `(countries, from, to)` tuple for the lifetime of the request via a small in-memory LRU (~100 entries) to avoid recomputing when month + week views both query the same range. Unit tests: year-boundary span (Dec 20 → Jan 5 picks up both years), multi-country dedup (July 4 US alone, May 5 in TW alone, single result), public-only filter (no Halloween), unknown country code returns 400.
+
+75. User country preference — migration adds `holidayCountries text[]` (nullable) to the `users` table. Better Auth's admin/updateUser already accepts arbitrary `data: { ... }` fields so no plugin changes needed. New GET/PATCH at `/api/users/me/preferences` for the current user to read/write their own countries (avoids routing through Better Auth for the hot path). Default on first visit: derive from `Intl.DateTimeFormat().resolvedOptions().locale` region segment (e.g. `en-US` → `["US"]`), persist on first save. Shared Zod schema `userPreferencesSchema` in `packages/shared`. Unit tests for locale → country mapping + the schema; integration test for GET/PATCH round-trip.
+
+76. Kicker rendering across calendar views — new `useHolidays(countries, from, to)` hook mirroring `useEvents`. `day-cell.tsx` gets a `holidays` prop and renders a `HolidayKicker` component absolutely positioned at the top of the cell (above the date numeral), Fraunces italic lowercase, `text-[10px]` with tracking-tight, terracotta `·` prefix, truncates. Cell `min-h-*` stays the same (kicker is absolutely positioned). `week-grid.tsx` + `day-grid.tsx` headers get the same kicker. `month-grid.tsx` + `week-grid.tsx` fetch holidays once per view-range load via the shared hook. Click opens `EventDetailPopover` in a new `readOnly` mode — added as an optional prop so month-view "+N more" keeps its existing behavior.
+
+77. Today view holiday line + settings UI — `today-view.tsx` renders an italic kicker (`"memorial day — observed in us"`) between the weekday label and the massive date hero, only when `today` is a holiday. Count is unaffected — holidays never appear in "N events today". In the `calendar-header` settings modal, add a new **Holidays** section: Fraunces italic label, a multi-select of country codes with a small searchable list sourced from `date-holidays`'s `getCountries()` (about 200 entries, lazy-loaded), default pulled from locale. Save goes through the task-75 PATCH endpoint. Also flag a "Show observances too" checkbox but keep it wired to a no-op for v1 (future-proofing without shipping the feature). Browser verification at 1440/1024/768/390px on a known holiday date.
+
+### Phase 18 — Future Enhancements (deferred)
 - iOS push via APNs — enable when Apple Developer account is available
 - Web Push notifications — Service Worker + Web Push API (add if users want desktop alerts)
 - iOS voice input — Speech framework mic button → parse endpoint (requires physical device)
 - Today view ambient widgets — weather, chores/waiting-on, shopping list (fill the reserved rail slot)
 - iOS "Today" view — port Morning Paper layout to SwiftUI
 - iOS Family page — port portrait grid + drawer layout to SwiftUI
+- Migrate web + iOS clients off legacy `/api/*` onto `/api/v1/*` once Phase 16 stabilizes
+- Outbound webhooks (HomeCal publishes events to other home apps)
+- Holidays v2 — observances, custom holidays, per-user holiday toggle (not country-wide), school/bank holiday types

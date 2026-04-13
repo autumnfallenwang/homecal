@@ -43,18 +43,11 @@ interface SheetContentProps extends React.ComponentProps<typeof SheetPrimitive.C
 }
 
 function SheetContent({ className, children, side = "right", ...props }: SheetContentProps) {
-  // The "right" variant automatically becomes a bottom sheet on `<md`
-  // screens — no prop change needed from callers.
+  // The "right" variant always slides from the right — on narrow screens
+  // it fills the viewport width instead of collapsing to a bottom sheet.
   const sideClasses =
     side === "right"
-      ? cn(
-          // Mobile: bottom sheet
-          "inset-x-0 bottom-0 h-[85vh] max-h-[85vh] w-full rounded-t-3xl border-t border-rule",
-          "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
-          // Desktop: right drawer
-          "md:inset-y-0 md:right-0 md:left-auto md:h-full md:max-h-full md:w-full md:max-w-md md:rounded-none md:border-l md:border-t-0",
-          "md:data-[state=closed]:slide-out-to-right md:data-[state=open]:slide-in-from-right",
-        )
+      ? "inset-y-0 right-0 h-full w-full max-w-md border-l border-rule data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right"
       : "inset-x-0 bottom-0 h-[85vh] max-h-[85vh] rounded-t-3xl border-t border-rule data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom";
 
   return (

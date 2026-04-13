@@ -61,10 +61,26 @@ interface CalendarHeaderProps {
   imageInputLoading?: boolean;
 }
 
-function splitTitle(title: string): { head: string; tail: string | null } {
-  const idx = title.lastIndexOf(" ");
-  if (idx <= 0) return { head: title, tail: null };
-  return { head: title.slice(0, idx), tail: title.slice(idx + 1) };
+/**
+ * Render a title string with every literal comma swapped for a Fraunces italic
+ * terracotta comma. Trailing whitespace after a comma is preserved as a normal
+ * space so phrases like "April, 2026" stay readable.
+ */
+function renderAccentedTitle(title: string): React.ReactNode[] {
+  const parts = title.split(",");
+  const out: React.ReactNode[] = [];
+  parts.forEach((part, i) => {
+    out.push(<span key={`part-${part}-${String(i)}`}>{part}</span>);
+    if (i < parts.length - 1) {
+      out.push(
+        // biome-ignore lint/suspicious/noArrayIndexKey: separator position is stable for a given title
+        <span key={`sep-${String(i)}`} className="font-display italic text-accent">
+          ,
+        </span>,
+      );
+    }
+  });
+  return out;
 }
 
 export function CalendarHeader({
@@ -96,7 +112,7 @@ export function CalendarHeader({
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
-  const { head, tail } = splitTitle(title);
+  const titleNodes = renderAccentedTitle(title);
   const initial = userName.trim().charAt(0).toUpperCase() || "·";
 
   function openProfile() {
@@ -268,11 +284,7 @@ export function CalendarHeader({
           key={title}
           className="font-display text-4xl font-light leading-none tracking-tight text-foreground md:text-5xl lg:text-6xl motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-left-2 motion-safe:duration-300"
         >
-          {head}
-          <span className="font-light not-italic text-accent">,</span>
-          {tail && (
-            <span className="ml-3 font-display text-lg italic text-muted-foreground">{tail}</span>
-          )}
+          {titleNodes}
         </h1>
 
         <div className="flex items-center gap-2">
@@ -283,38 +295,39 @@ export function CalendarHeader({
             {segButton("month", "Month")}
           </div>
 
-          {!isTodayView && (
-            <div className="inline-flex items-center gap-1">
+          <div className="inline-flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onPrev}
+              disabled={isTodayView}
+              className="rounded-full"
+              aria-label="Previous"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            {onToday && (
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={onPrev}
-                className="rounded-full"
-                aria-label="Previous"
+                variant="outline"
+                size="sm"
+                onClick={onToday}
+                disabled={isTodayView}
+                className="font-display italic text-sm rounded-full px-4"
               >
-                <ChevronLeft className="h-4 w-4" />
+                Today
               </Button>
-              {onToday && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onToday}
-                  className="font-display italic text-sm rounded-full px-4"
-                >
-                  Today
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={onNext}
-                className="rounded-full"
-                aria-label="Next"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
+            )}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onNext}
+              disabled={isTodayView}
+              className="rounded-full"
+              aria-label="Next"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
 
           {onSmartInput && onImageInput && onIcsImport && onNewEvent && (
             <QuickAddPopover

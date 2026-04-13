@@ -171,7 +171,31 @@ Blockers uncovered during the pre-production audit of the Phase 13–15 round. F
 |---|------|--------|-------|
 | 69 | Pre-deploy build + test fixes | ✅ Done | **`ics-parser.ts` TS build errors** (pre-existing, Phase 12): added `icsString(v)` helper that normalizes node-ical's `string \| { val: string }` shape on `summary`/`location`/`description`, plus a null guard on the keyed parsed entry. **`require-admin.ts` TS error** (Phase 15 regression): restored `async` on the middleware handler (Hono's `createMiddleware` types require it) with a biome-ignore for the `useAwait` rule. **`series.integration.test.ts` 5 failing tests** (pre-existing, Phase 9): tests were generating raw `randomUUID()` seriesIds that hit the Phase 9 task 40 `events.seriesId → series.id` FK constraint; added a `createSeries()` helper that inserts a real series row and swapped the 5 event-linking spots to use it. Non-existent-series 404 tests keep a hardcoded zero UUID. **Results**: `pnpm lint` clean, `pnpm build` clean both packages, `pnpm --filter @homecal/api test` now 25 files / 345 passing (was 24/340). Lessons note updated |
 
-## Phase 16: Future Enhancements (deferred)
+## Phase 16: Multi-app API — open HomeCal as a shared service
+
+Prep work to let HomeCal's REST API be called safely by other "home apps". Four tasks in ordered dependency: machine-auth → rate limiting → versioning → self-documenting. Full rationale + audit in [design-plan.md Phase 16](design-plan.md).
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 70 | Better Auth `apiKey` plugin | Not started | Enable Better Auth's first-party `apiKey` plugin. New admin-only routes: `POST /api/admin/api-keys` (create → returns plaintext once), `GET /api/admin/api-keys` (list masked), `DELETE /api/admin/api-keys/:id` (revoke). Update `requireAuth` to accept `x-api-key` header alongside cookies + bearer, resolving to the owning user so existing role checks (including `requireAdmin`) just work. Shared Zod schemas, unit + integration tests (create/list/revoke, expired-key rejection, admin scope passes `requireAdmin`, user scope fails). Pattern doc in `lessons.md`: one service user per calling app |
+| 71 | Rate limiting | Not started | Add `hono-rate-limiter` middleware on `/api/*`. Per-caller key precedence: `x-api-key` value → session user id → IP. Defaults 600 req/min (burst 60/sec), 1200/min for admin routes, configurable via `RATE_LIMIT_PER_MIN`. Returns `429` with `Retry-After`. Unit test for key extraction, integration test for 601st call returning 429 |
+| 72 | API versioning (`/api/v1` prefix) | Not started | Mount all routes under `/api/v1` in addition to legacy `/api/*`. Legacy routes emit `Deprecation` + `Sunset` headers. Web + iOS clients stay on `/api/*` for now. New `docs/api-versioning.md` documenting the policy (breaking = new version, additive = current). Integration test: `/api/events` and `/api/v1/events` identical payloads; legacy path has deprecation header |
+| 73 | OpenAPI + Swagger UI | Not started | Add `@hono/zod-openapi` + `@hono/swagger-ui`. Migrate each route group (`events`, `series`, `reminders`, `users`, `devices`, `admin`) from `new Hono()` to `new OpenAPIHono()` with `createRoute({ request, responses })`. Annotate every shared Zod schema with `.openapi({ description, example })` in `packages/shared`. Mount `/api/docs` (Swagger UI, admin-gated in prod, open in dev) + `/api/openapi.json` (spec). Verify by round-tripping the spec through `openapi-typescript` to generate a typed client |
+
+**Explicitly deferred to later**: migrating web + iOS clients off `/api/*` onto `/api/v1/*`, OAuth delegated auth for external apps, outbound webhooks.
+
+## Phase 17: National holidays (multi-country, read-only kicker)
+
+Holidays are a read-only layer backed by the `date-holidays` npm package (pure JS, MIT, 200+ countries, zero network calls). Computed on-the-fly — no DB storage, no sync job. Multi-country from day one; public holidays only for v1 (observances deferred). Rendered as **Fraunces italic kicker lines** above the date numeral (no ribbons, no pill backgrounds), matching the Warm Editorial typographic aesthetic. Full spec + visual decisions in [design-plan.md Phase 17](design-plan.md).
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 74 | Holidays service + endpoint | Not started | `apps/api/src/services/holidays.ts` with `getHolidays({ countries, from, to })` — iterates year ranges, filters `type === "public"`, dedupes by `date\|title`. `GET /api/holidays?countries=US,TW&from=&to=` with shared Zod schema. Per-request LRU cache for the `(countries, from, to)` tuple. Unit tests: year-boundary span, multi-country dedup, public-only filter, unknown country → 400 |
+| 75 | User country preference | Not started | Migration: `users.holidayCountries text[]` nullable. `GET/PATCH /api/users/me/preferences` (hot path, not through Better Auth). Default on first visit from `Intl.DateTimeFormat().resolvedOptions().locale`. Shared `userPreferencesSchema` in `packages/shared`. Unit + integration tests |
+| 76 | Kicker rendering in calendar views | Not started | New `useHolidays(countries, from, to)` hook. New `HolidayKicker` component: Fraunces italic lowercase, terracotta `·` prefix, absolute-positioned above the date numeral so it doesn't eat the 3-pill budget. Multi-country dedupes to one line with `·` separators. `day-cell.tsx` gets a `holidays` prop; `week-grid.tsx` + `day-grid.tsx` headers get the same kicker. Click → `EventDetailPopover` in new `readOnly` mode (title, country, type, no Edit) |
+| 77 | Today view holiday line + settings UI | Not started | `today-view.tsx`: italic kicker between the weekday label and the massive date hero, only when today is a holiday. Event counts unaffected. Settings modal in `calendar-header.tsx`: new **Holidays** section with a multi-select country picker sourced from `date-holidays`' `getCountries()`, default from locale, saves via task-75 PATCH. "Show observances" checkbox wired to a no-op for v1. Browser verification at 1440/1024/768/390px on a known US holiday |
+
+## Phase 18: Future Enhancements (deferred)
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
@@ -181,6 +205,9 @@ Blockers uncovered during the pre-production audit of the Phase 13–15 round. F
 | — | Today view ambient widgets | Not started | Weather, chores/waiting-on, shopping list — fill the reserved glance-rail slot |
 | — | iOS Today view | Not started | Port Morning Paper layout to SwiftUI |
 | — | iOS Family page | Not started | Port portrait grid + drawer layout to SwiftUI |
+| — | Migrate web + iOS clients off legacy `/api/*` onto `/api/v1/*` | Not started | Follow-up once Phase 16 is proven |
+| — | Outbound webhooks | Not started | HomeCal publishes events to other home apps |
+| — | Holidays v2 | Not started | Observances, custom holidays, per-user opt-in, school/bank types |
 
 ## What's Working
 
@@ -216,7 +243,7 @@ Blockers uncovered during the pre-production audit of the Phase 13–15 round. F
 
 ## What's Next
 
-**Phase 13–15 + pre-deploy fixes all complete — ready for prod.** The full round ships: Warm Editorial refresh, Today view, Family page + admin APIs. Pre-existing ics-parser, require-admin, and series integration test failures are all resolved via task 69. Full suite: `pnpm lint` clean, `pnpm build` clean both packages, 345/345 tests passing. **Next step: `homecal update` on prod.** Remaining unscheduled work lives in Phase 16 (iOS push, Web Push, iOS voice, Today/Family iOS ports, ambient widgets).
+Phase 13–15 shipped to prod (commit `daffb83`). Next round: **Phase 16 — Multi-app API**, opening HomeCal as a service for other home apps. Task order: 70 (Better Auth `apiKey` plugin) → 71 (rate limiting) → 72 (`/api/v1` versioning) → 73 (OpenAPI + Swagger UI). Phase 17 is the remaining deferred list (iOS push, ambient widgets, iOS ports, etc.).
 
 ## Reference Docs
 
