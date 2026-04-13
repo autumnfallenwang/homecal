@@ -1,7 +1,9 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import type { CalendarEvent } from "@/hooks/use-events";
 import { cn } from "@/lib/utils";
+import { EventDetailPopover } from "./event-detail-popover";
 import { EventPill } from "./event-pill";
 
 const MAX_VISIBLE_PILLS = 3;
@@ -47,9 +49,11 @@ export function DayCell({
   onDayClick,
 }: DayCellProps) {
   const visibleEvents = events.slice(0, MAX_VISIBLE_PILLS);
-  const overflowCount = events.length - MAX_VISIBLE_PILLS;
+  const hiddenEvents = events.slice(MAX_VISIBLE_PILLS);
+  const overflowCount = hiddenEvents.length;
   const dow = date.getDay();
   const isWeekend = dow === 0 || dow === 6;
+  const isEmpty = events.length === 0;
   const delay = Math.min(index * STAGGER_MS, MAX_STAGGER_MS);
 
   return (
@@ -99,11 +103,34 @@ export function DayCell({
           );
         })}
         {overflowCount > 0 && (
-          <span className="mt-0.5 px-0.5 font-display text-xs italic text-muted-foreground">
-            +{overflowCount} more
-          </span>
+          <EventDetailPopover
+            events={hiddenEvents}
+            onEventClick={onEventClick}
+            heading={date.toLocaleDateString("en-US", {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+            })}
+            trigger={
+              <button
+                type="button"
+                onClick={(e) => e.stopPropagation()}
+                className="mt-0.5 self-start rounded-full px-2 py-0.5 font-display text-[11px] italic text-accent transition-colors hover:bg-accent-soft"
+              >
+                +{overflowCount} more
+              </button>
+            }
+          />
         )}
       </div>
+      {isEmpty && isCurrentMonth && (
+        <div
+          className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"
+          aria-hidden
+        >
+          <Plus className="h-5 w-5 text-muted-foreground/40" />
+        </div>
+      )}
     </div>
   );
 }

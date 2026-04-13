@@ -38,11 +38,11 @@ export function ChangeLog({ logs, isLoading }: ChangeLogProps) {
     return (
       <div className="space-y-2">
         {[1, 2].map((i) => (
-          <div key={i} className="flex items-start gap-2 animate-pulse">
-            <div className="w-2 h-2 rounded-full bg-muted mt-1.5 shrink-0" />
-            <div className="space-y-1 flex-1">
-              <div className="h-3 bg-muted rounded w-3/4" />
-              <div className="h-2 bg-muted rounded w-1/2" />
+          <div key={i} className="flex items-start gap-2 motion-safe:animate-pulse">
+            <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-muted" />
+            <div className="flex-1 space-y-1">
+              <div className="h-3 w-3/4 rounded bg-muted" />
+              <div className="h-2 w-1/2 rounded bg-muted" />
             </div>
           </div>
         ))}
@@ -51,26 +51,34 @@ export function ChangeLog({ logs, isLoading }: ChangeLogProps) {
   }
 
   if (logs.length === 0) {
-    return <p className="text-sm text-muted-foreground">No change history.</p>;
+    return <p className="font-display text-sm italic text-muted-foreground">No change history.</p>;
   }
 
   return (
-    <div className="max-h-48 overflow-y-auto space-y-2">
+    <div className="max-h-48 space-y-2.5 overflow-y-auto pr-2">
       {logs.map((log) => (
-        <div key={log.id} className="flex items-start gap-2 text-sm">
+        <div key={log.id} className="flex items-start gap-2.5 text-sm">
           <span
-            className="w-2 h-2 rounded-full mt-1.5 shrink-0"
-            style={{ backgroundColor: log.user.color }}
+            className="mt-1.5 h-2 w-2 shrink-0 rounded-full ring-2 ring-offset-1 ring-offset-background"
+            style={{ backgroundColor: log.user.color, boxShadow: `0 0 0 1px ${log.user.color}30` }}
+            aria-hidden
           />
-          <div className="min-w-0">
-            <span className="font-medium">{log.user.name}</span>{" "}
-            <span className="text-muted-foreground">
-              {log.action} · {formatTimestamp(log.timestamp)}
-            </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2">
+              <span className="font-medium">{log.user.name}</span>
+              <span className="font-display text-[11px] uppercase tracking-wider text-muted-foreground">
+                {log.action}
+              </span>
+              <span className="ml-auto shrink-0 font-display text-xs italic text-ink-faint">
+                {formatTimestamp(log.timestamp)}
+              </span>
+            </div>
             {log.action === "updated" && log.changes && (
-              <ul className="mt-0.5 text-xs text-muted-foreground list-disc list-inside">
+              <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
                 {Object.entries(log.changes).map(([field, { from, to }]) => (
-                  <li key={field}>{formatFieldChange(field, from, to)}</li>
+                  <li key={field} className="truncate">
+                    <span className="text-accent">·</span> {formatFieldChange(field, from, to)}
+                  </li>
                 ))}
               </ul>
             )}

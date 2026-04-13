@@ -2,7 +2,7 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Member } from "@/hooks/use-members";
-import { cn } from "@/lib/utils";
+import { MemberChip } from "./member-chip";
 
 interface MemberFilterProps {
   members: Member[];
@@ -11,45 +11,6 @@ interface MemberFilterProps {
   onToggle: (memberId: string) => void;
   onOnlyMe?: () => void;
   onEveryone?: () => void;
-}
-
-function initial(name: string): string {
-  return name.trim().charAt(0).toUpperCase() || "·";
-}
-
-interface MemberChipProps {
-  member: Member;
-  checked: boolean;
-  onClick: () => void;
-}
-
-function MemberChip({ member, checked, onClick }: MemberChipProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={checked}
-      className={cn(
-        "group inline-flex items-center gap-2.5 rounded-full p-1 pr-3.5 transition-all",
-        checked ? "bg-paper-warm/70 hover:bg-paper-warm" : "opacity-45 hover:opacity-90",
-      )}
-    >
-      <span
-        className={cn(
-          "grid h-7 w-7 place-items-center rounded-full font-display text-xs font-medium transition-all",
-          checked ? "text-white" : "bg-background ring-1 ring-inset",
-        )}
-        style={
-          checked
-            ? { backgroundColor: member.color }
-            : { color: member.color, borderColor: member.color }
-        }
-      >
-        {initial(member.name)}
-      </span>
-      <span className="text-sm font-medium">{member.name}</span>
-    </button>
-  );
 }
 
 export function MemberFilter({

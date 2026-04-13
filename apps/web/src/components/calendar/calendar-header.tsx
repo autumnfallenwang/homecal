@@ -264,7 +264,7 @@ export function CalendarHeader({
       <div className="flex flex-wrap items-end justify-between gap-4 px-6 pb-5 md:flex-nowrap">
         <h1
           key={title}
-          className="font-display text-4xl font-light leading-none tracking-tight text-foreground duration-300 animate-in fade-in-0 slide-in-from-left-2 md:text-5xl lg:text-6xl"
+          className="font-display text-4xl font-light leading-none tracking-tight text-foreground md:text-5xl lg:text-6xl motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-left-2 motion-safe:duration-300"
         >
           {head}
           <span className="font-light not-italic text-accent">,</span>
@@ -335,53 +335,85 @@ export function CalendarHeader({
 
       {/* Settings Modal (theme moved to dropdown; email/color/password only) */}
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle className="font-display text-2xl">Account settings</DialogTitle>
+            <DialogTitle className="font-display text-2xl font-light tracking-tight">
+              Account settings
+              <span className="font-display italic text-accent">,</span>
+            </DialogTitle>
             <DialogDescription>Update your email, color, or password.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleProfileSubmit} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="profile-email">Email</Label>
-              <Input
-                id="profile-email"
-                type="email"
-                value={profileEmail}
-                onChange={(e) => setProfileEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="profile-color">Color</Label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="profile-color"
-                  type="color"
-                  value={profileColor}
-                  onChange={(e) => setProfileColor(e.target.value)}
-                  className="h-9 w-12 cursor-pointer rounded border"
-                />
-                <span className="text-sm text-muted-foreground">{profileColor}</span>
+          <form onSubmit={handleProfileSubmit} className="flex flex-col gap-5">
+            <div className="grid gap-x-6 gap-y-5 md:grid-cols-2">
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-1.5">
+                  <Label
+                    htmlFor="profile-email"
+                    className="font-display text-xs italic tracking-wide text-muted-foreground"
+                  >
+                    Email
+                  </Label>
+                  <Input
+                    id="profile-email"
+                    type="email"
+                    value={profileEmail}
+                    onChange={(e) => setProfileEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label
+                    htmlFor="profile-password"
+                    className="font-display text-xs italic tracking-wide text-muted-foreground"
+                  >
+                    New password
+                  </Label>
+                  <Input
+                    id="profile-password"
+                    type="password"
+                    value={profilePassword}
+                    onChange={(e) => setProfilePassword(e.target.value)}
+                    placeholder="Leave blank to keep current"
+                    minLength={8}
+                  />
+                </div>
               </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="profile-password">New Password</Label>
-              <Input
-                id="profile-password"
-                type="password"
-                value={profilePassword}
-                onChange={(e) => setProfilePassword(e.target.value)}
-                placeholder="Leave blank to keep current"
-                minLength={8}
-              />
+
+              <div className="flex flex-col gap-1.5">
+                <Label
+                  htmlFor="profile-color"
+                  className="font-display text-xs italic tracking-wide text-muted-foreground"
+                >
+                  Your color
+                </Label>
+                <div className="flex items-center gap-3 rounded-lg border border-rule bg-paper-warm/50 p-3">
+                  <span
+                    className="h-10 w-10 rounded-full ring-1 ring-rule"
+                    style={{ backgroundColor: profileColor }}
+                    aria-hidden
+                  />
+                  <div className="flex flex-col gap-1">
+                    <input
+                      id="profile-color"
+                      type="color"
+                      value={profileColor}
+                      onChange={(e) => setProfileColor(e.target.value)}
+                      className="h-7 w-16 cursor-pointer rounded border border-rule bg-background"
+                    />
+                    <span className="tabular-nums text-[11px] text-muted-foreground">
+                      {profileColor}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
             {profileError && <p className="text-sm text-destructive">{profileError}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setProfileOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={profileSaving}>
-                {profileSaving ? "Saving..." : "Save"}
+              <Button type="submit" disabled={profileSaving} className="rounded-full px-5">
+                {profileSaving ? "Saving..." : "Save changes"}
               </Button>
             </DialogFooter>
           </form>

@@ -2,8 +2,8 @@
 
 import { type FormEvent, useEffect, useState } from "react";
 import { ChangeLog } from "@/components/calendar/change-log";
+import { MemberChip } from "@/components/calendar/member-chip";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import { useEventLogs } from "@/hooks/use-event-logs";
 import type { CalendarEvent } from "@/hooks/use-events";
 import type { Member } from "@/hooks/use-members";
 import { generateSeriesDates, type SeriesOccurrence } from "@/lib/series-utils";
+import { cn } from "@/lib/utils";
 
 export interface ParsedEvent {
   title: string;
@@ -557,10 +558,14 @@ export function EventDialog({
     const isEditingSeries = isSeriesEdit;
     return (
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>
-              {isEditingSeries ? "Update Series — Preview" : "Create Series — Preview"}
+            <DialogTitle className="font-display text-2xl font-light tracking-tight">
+              {isEditingSeries ? "Update series" : "Create series"}
+              <span className="font-display italic text-accent">,</span>
+              <span className="ml-2 font-display text-lg italic text-muted-foreground">
+                preview
+              </span>
             </DialogTitle>
             <DialogDescription>
               {isEditingSeries
@@ -568,11 +573,13 @@ export function EventDialog({
                 : `This will create ${previewDates.length} events for "${title}"`}
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-64 overflow-y-auto rounded-md border p-3">
+          <div className="max-h-64 overflow-y-auto rounded-md border border-rule p-3">
             <div className="flex flex-col gap-1 text-sm">
               {previewDates.map((occ, i) => (
                 <div key={occ.start.toISOString()} className="flex items-center gap-2">
-                  <span className="w-6 text-right text-muted-foreground">{i + 1}.</span>
+                  <span className="w-6 text-right font-display italic text-muted-foreground">
+                    {i + 1}.
+                  </span>
                   <span>
                     {occ.start.toLocaleDateString("en-US", {
                       weekday: "short",
@@ -580,7 +587,7 @@ export function EventDialog({
                       day: "numeric",
                     })}
                   </span>
-                  <span className="text-muted-foreground">
+                  <span className="tabular-nums text-muted-foreground">
                     {occ.start.toLocaleTimeString("en-US", {
                       hour: "numeric",
                       minute: "2-digit",
@@ -606,8 +613,8 @@ export function EventDialog({
               onClick={isEditingSeries ? handleSeriesUpdate : handleSeriesCreate}
             >
               {saving && "Saving..."}
-              {!saving && isEditingSeries && `Update ${previewDates.length} Events`}
-              {!saving && !isEditingSeries && `Create ${previewDates.length} Events`}
+              {!saving && isEditingSeries && `Update ${previewDates.length} events`}
+              {!saving && !isEditingSeries && `Create ${previewDates.length} events`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -616,14 +623,18 @@ export function EventDialog({
   }
 
   // --- Main form ---
+  const twoCol = !isSeries && !isSeriesEdit;
+  let headerLabel = "New event";
+  if (isSeriesEdit) headerLabel = "Edit entire series";
+  else if (isEdit) headerLabel = "Edit event";
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {isSeriesEdit && "Edit Entire Series"}
-            {isEdit && !isSeriesEdit && "Edit Event"}
-            {!isEdit && "New Event"}
+          <DialogTitle className="font-display text-2xl font-light tracking-tight">
+            {headerLabel}
+            <span className="font-display italic text-accent">,</span>
           </DialogTitle>
           <DialogDescription>
             {isSeriesEdit && "Update the series settings and regenerate all events."}
@@ -641,287 +652,353 @@ export function EventDialog({
                 }
               : handleSubmit
           }
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-5"
         >
-          {/* Mode toggle — create: single/series, edit series event: this event/entire series */}
+          {/* Mode toggle */}
           {isCreate && (
-            <div className="flex items-center rounded-md border w-fit">
-              <Button
-                type="button"
-                variant={createMode === "single" ? "secondary" : "ghost"}
-                size="sm"
-                className="rounded-r-none"
-                onClick={() => setCreateMode("single")}
-              >
-                Single
-              </Button>
-              <Button
-                type="button"
-                variant={createMode === "series" ? "secondary" : "ghost"}
-                size="sm"
-                className="rounded-l-none"
-                onClick={() => setCreateMode("series")}
-              >
-                Series
-              </Button>
+            <div className="inline-flex items-center gap-0.5 self-start rounded-full border border-rule bg-background p-0.5">
+              {(["single", "series"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setCreateMode(m)}
+                  className={cn(
+                    "rounded-full px-4 py-1.5 text-xs font-medium capitalize tracking-wide transition-colors",
+                    createMode === m
+                      ? "bg-foreground text-background shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {m}
+                </button>
+              ))}
             </div>
           )}
           {isSeriesEvent && (
-            <div className="flex items-center rounded-md border w-fit">
-              <Button
+            <div className="inline-flex items-center gap-0.5 self-start rounded-full border border-rule bg-background p-0.5">
+              <button
                 type="button"
-                variant={seriesEditMode === "single" ? "secondary" : "ghost"}
-                size="sm"
-                className="rounded-r-none"
                 onClick={() => setSeriesEditMode("single")}
+                className={cn(
+                  "rounded-full px-4 py-1.5 text-xs font-medium tracking-wide transition-colors",
+                  seriesEditMode === "single"
+                    ? "bg-foreground text-background shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
               >
-                This Event
-              </Button>
-              <Button
+                This event
+              </button>
+              <button
                 type="button"
-                variant={seriesEditMode === "series" ? "secondary" : "ghost"}
-                size="sm"
-                className="rounded-l-none"
                 onClick={() => {
                   if (seriesEditMode !== "series") void loadSeriesConfig();
                 }}
+                className={cn(
+                  "rounded-full px-4 py-1.5 text-xs font-medium tracking-wide transition-colors",
+                  seriesEditMode === "series"
+                    ? "bg-foreground text-background shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
               >
-                Entire Series
-              </Button>
+                Entire series
+              </button>
             </div>
           )}
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="event-title">Title</Label>
-            <Input
+          {/* Hero title input — Fraunces, bottom-border only */}
+          <div className="flex flex-col">
+            <input
               id="event-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Event title"
               required
-              autoFocus
+              className="w-full border-0 border-b border-rule bg-transparent px-0 pb-2 font-display text-2xl leading-tight tracking-tight text-foreground outline-none transition-colors placeholder:italic placeholder:text-muted-foreground/60 focus:border-accent"
             />
           </div>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="event-location">Location</Label>
-            <Input
-              id="event-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Optional"
-            />
-          </div>
-
-          {/* Time inputs — different for single vs series */}
-          {isSeries || isSeriesEdit ? (
-            <>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label>Start Date</Label>
-                  <Input
-                    type="date"
-                    value={seriesStartDate}
-                    onChange={(e) => setSeriesStartDate(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label>End Date</Label>
-                  <Input
-                    type="date"
-                    value={seriesEndDate}
-                    min={seriesStartDate}
-                    onChange={(e) => setSeriesEndDate(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label>Start Time</Label>
-                  <Input
-                    type="time"
-                    value={seriesStartTime}
-                    onChange={(e) => setSeriesStartTime(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label>End Time</Label>
-                  <Input
-                    type="time"
-                    value={seriesEndTime}
-                    min={seriesStartTime}
-                    onChange={(e) => setSeriesEndTime(e.target.value)}
-                    required
-                  />
-                </div>
+          {/* Body grid — 2 cols on md+ for single events, 1 col for series */}
+          <div className={cn("grid gap-x-6 gap-y-5", twoCol && "md:grid-cols-2")}>
+            {/* ─── Left column (or full width in series) ─── */}
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-1.5">
+                <Label
+                  htmlFor="event-location"
+                  className="font-display text-xs italic tracking-wide text-muted-foreground"
+                >
+                  Location
+                </Label>
+                <Input
+                  id="event-location"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Optional"
+                />
               </div>
 
-              {/* Repeat pattern */}
-              <div className="flex flex-col gap-2">
-                <Label>Repeat</Label>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">Every</span>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={99}
-                    value={repeatEvery}
-                    onChange={(e) => setRepeatEvery(Number(e.target.value) || 1)}
-                    className="w-16"
-                  />
-                  <select
-                    value={repeatUnit}
-                    onChange={(e) => setRepeatUnit(e.target.value as "days" | "weeks" | "months")}
-                    className="rounded-md border bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="days">Days</option>
-                    <option value="weeks">Weeks</option>
-                    <option value="months">Months</option>
-                  </select>
-                </div>
-              </div>
+              {isSeries || isSeriesEdit ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="font-display text-xs italic tracking-wide text-muted-foreground">
+                        Start date
+                      </Label>
+                      <Input
+                        type="date"
+                        value={seriesStartDate}
+                        onChange={(e) => setSeriesStartDate(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="font-display text-xs italic tracking-wide text-muted-foreground">
+                        End date
+                      </Label>
+                      <Input
+                        type="date"
+                        value={seriesEndDate}
+                        min={seriesStartDate}
+                        onChange={(e) => setSeriesEndDate(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="font-display text-xs italic tracking-wide text-muted-foreground">
+                        Start time
+                      </Label>
+                      <Input
+                        type="time"
+                        value={seriesStartTime}
+                        onChange={(e) => setSeriesStartTime(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="font-display text-xs italic tracking-wide text-muted-foreground">
+                        End time
+                      </Label>
+                      <Input
+                        type="time"
+                        value={seriesEndTime}
+                        min={seriesStartTime}
+                        onChange={(e) => setSeriesEndTime(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
 
-              {/* Week day selector */}
-              {repeatUnit === "weeks" && (
-                <div className="flex flex-col gap-2">
-                  <Label>On days</Label>
-                  <div className="flex gap-1">
-                    {DAY_LABELS.map((label, i) => (
-                      <Button
-                        key={label}
-                        type="button"
-                        variant={weekDays.has(i) ? "default" : "outline"}
-                        size="sm"
-                        className="w-10 px-0"
-                        onClick={() => toggleWeekDay(i)}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="font-display text-xs italic tracking-wide text-muted-foreground">
+                      Repeat
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Every</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={99}
+                        value={repeatEvery}
+                        onChange={(e) => setRepeatEvery(Number(e.target.value) || 1)}
+                        className="w-16 tabular-nums"
+                      />
+                      <select
+                        value={repeatUnit}
+                        onChange={(e) =>
+                          setRepeatUnit(e.target.value as "days" | "weeks" | "months")
+                        }
+                        className="rounded-md border border-rule bg-background px-3 py-2 text-sm"
                       >
-                        {label}
-                      </Button>
+                        <option value="days">Days</option>
+                        <option value="weeks">Weeks</option>
+                        <option value="months">Months</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {repeatUnit === "weeks" && (
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="font-display text-xs italic tracking-wide text-muted-foreground">
+                        On days
+                      </Label>
+                      <div className="flex gap-1">
+                        {DAY_LABELS.map((label, i) => (
+                          <button
+                            key={label}
+                            type="button"
+                            onClick={() => toggleWeekDay(i)}
+                            className={cn(
+                              "h-9 w-10 rounded-full text-xs font-medium transition-colors",
+                              weekDays.has(i)
+                                ? "bg-foreground text-background"
+                                : "border border-rule text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {repeatUnit === "months" && (
+                    <div className="flex items-center gap-2">
+                      <Label className="font-display text-xs italic tracking-wide text-muted-foreground">
+                        On day
+                      </Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={31}
+                        value={monthDay}
+                        onChange={(e) => setMonthDay(Number(e.target.value) || 1)}
+                        className="w-16 tabular-nums"
+                      />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <Label
+                      htmlFor="event-start"
+                      className="font-display text-xs italic tracking-wide text-muted-foreground"
+                    >
+                      Start
+                    </Label>
+                    <Input
+                      id="event-start"
+                      type="datetime-local"
+                      value={start}
+                      onChange={(e) => {
+                        const newStart = e.target.value;
+                        setStart(newStart);
+                        if (newStart) {
+                          const startDate = new Date(newStart);
+                          const newEnd = new Date(startDate.getTime() + 30 * 60 * 1000);
+                          const pad = (n: number) => n.toString().padStart(2, "0");
+                          setEnd(
+                            `${newEnd.getFullYear()}-${pad(newEnd.getMonth() + 1)}-${pad(newEnd.getDate())}T${pad(newEnd.getHours())}:${pad(newEnd.getMinutes())}`,
+                          );
+                        }
+                      }}
+                      required
+                      className="tabular-nums"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label
+                      htmlFor="event-end"
+                      className="font-display text-xs italic tracking-wide text-muted-foreground"
+                    >
+                      End
+                    </Label>
+                    <Input
+                      id="event-end"
+                      type="datetime-local"
+                      min={start}
+                      value={end}
+                      onChange={(e) => setEnd(e.target.value)}
+                      required
+                      className="tabular-nums"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ─── Right column (notes, privacy, assignees, reminders) ─── */}
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-1.5">
+                <Label
+                  htmlFor="event-description"
+                  className="font-display text-xs italic tracking-wide text-muted-foreground"
+                >
+                  Notes
+                </Label>
+                <textarea
+                  id="event-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Optional"
+                  rows={3}
+                  className="flex w-full rounded-md border border-rule bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor="event-private"
+                  className="flex items-center gap-2 font-display text-xs italic tracking-wide text-muted-foreground"
+                >
+                  Private event
+                </Label>
+                <Switch id="event-private" checked={isPrivate} onCheckedChange={setIsPrivate} />
+              </div>
+
+              {!isPrivate && members.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <Label className="font-display text-xs italic tracking-wide text-muted-foreground">
+                    Assignees
+                  </Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {members.map((member) => (
+                      <MemberChip
+                        key={member.id}
+                        member={member}
+                        size="sm"
+                        checked={assigneeIds.includes(member.id)}
+                        onClick={() =>
+                          setAssigneeIds((prev) =>
+                            prev.includes(member.id)
+                              ? prev.filter((id) => id !== member.id)
+                              : [...prev, member.id],
+                          )
+                        }
+                      />
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Month day selector */}
-              {repeatUnit === "months" && (
-                <div className="flex items-center gap-2">
-                  <Label>On day</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={monthDay}
-                    onChange={(e) => setMonthDay(Number(e.target.value) || 1)}
-                    className="w-16"
-                  />
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="event-start">Start</Label>
-                <Input
-                  id="event-start"
-                  type="datetime-local"
-                  value={start}
-                  onChange={(e) => {
-                    const newStart = e.target.value;
-                    setStart(newStart);
-                    if (newStart) {
-                      const startDate = new Date(newStart);
-                      const newEnd = new Date(startDate.getTime() + 30 * 60 * 1000);
-                      const pad = (n: number) => n.toString().padStart(2, "0");
-                      setEnd(
-                        `${newEnd.getFullYear()}-${pad(newEnd.getMonth() + 1)}-${pad(newEnd.getDate())}T${pad(newEnd.getHours())}:${pad(newEnd.getMinutes())}`,
-                      );
-                    }
-                  }}
-                  required
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="event-end">End</Label>
-                <Input
-                  id="event-end"
-                  type="datetime-local"
-                  min={start}
-                  value={end}
-                  onChange={(e) => setEnd(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="event-description">Description</Label>
-            <textarea
-              id="event-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional"
-              rows={2}
-              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Switch id="event-private" checked={isPrivate} onCheckedChange={setIsPrivate} />
-            <Label htmlFor="event-private">Private event</Label>
-          </div>
-
-          {!isPrivate && members.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <Label>Assignees</Label>
               <div className="flex flex-col gap-1.5">
-                {members.map((member) => (
-                  <div key={member.id} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`assignee-${member.id}`}
-                      checked={assigneeIds.includes(member.id)}
-                      onCheckedChange={(checked) => {
-                        setAssigneeIds((prev) =>
-                          checked ? [...prev, member.id] : prev.filter((id) => id !== member.id),
-                        );
-                      }}
-                    />
-                    <span
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: member.color }}
-                    />
-                    <label htmlFor={`assignee-${member.id}`} className="cursor-pointer text-sm">
-                      {member.name}
-                    </label>
-                  </div>
-                ))}
+                <Label className="font-display text-xs italic tracking-wide text-muted-foreground">
+                  Email reminders
+                </Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {REMINDER_PRESETS.map((preset) => {
+                    const active = reminderMinutes.has(preset.minutes);
+                    return (
+                      <button
+                        key={preset.minutes}
+                        type="button"
+                        onClick={() => toggleReminder(preset.minutes)}
+                        className={cn(
+                          "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                          active
+                            ? "bg-foreground text-background"
+                            : "border border-rule text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
-
-          <div className="flex flex-col gap-2">
-            <Label>Email Reminders</Label>
-            <div className="flex flex-wrap gap-2">
-              {REMINDER_PRESETS.map((preset) => (
-                <Button
-                  key={preset.minutes}
-                  type="button"
-                  variant={reminderMinutes.has(preset.minutes) ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => toggleReminder(preset.minutes)}
-                >
-                  {preset.label}
-                </Button>
-              ))}
             </div>
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <DialogFooter className={isEdit ? "sm:justify-between" : ""}>
+          <DialogFooter
+            className={cn(
+              "sticky -mx-6 -mb-6 mt-2 border-t border-rule bg-background/95 px-6 py-4 backdrop-blur",
+              isEdit && "sm:justify-between",
+            )}
+            style={{ bottom: "-1.5rem" }}
+          >
             {isEdit && (
               <div className="flex items-center gap-2">
                 {confirmingDelete ? (
@@ -976,20 +1053,22 @@ export function EventDialog({
               <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={saving}>
+              <Button type="submit" disabled={saving} className="rounded-full px-5">
                 {saving && "Saving..."}
-                {!saving && isSeriesEdit && "Preview Changes"}
-                {!saving && isEdit && !isSeriesEdit && "Save Changes"}
-                {!saving && isCreate && !isSeries && "Create Event"}
-                {!saving && isSeries && "Preview Series"}
+                {!saving && isSeriesEdit && "Preview changes"}
+                {!saving && isEdit && !isSeriesEdit && "Save changes"}
+                {!saving && isCreate && !isSeries && "Create event"}
+                {!saving && isSeries && "Preview series"}
               </Button>
             </div>
           </DialogFooter>
         </form>
 
         {isEdit && !event?.private && (
-          <div className="border-t pt-4">
-            <h4 className="text-sm font-medium mb-2">History</h4>
+          <div className="mt-4 border-t border-rule pt-4">
+            <h4 className="mb-2 font-display text-sm italic tracking-wide text-muted-foreground">
+              History
+            </h4>
             <ChangeLog logs={logs} isLoading={logsLoading} />
           </div>
         )}

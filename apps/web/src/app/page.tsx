@@ -3,9 +3,11 @@
 import { useCallback, useMemo, useState } from "react";
 import { CalendarHeader } from "@/components/calendar/calendar-header";
 import { DayGrid } from "@/components/calendar/day-grid";
+import { EmptyCalendar } from "@/components/calendar/empty-calendar";
 import { EventDialog, type ParsedEvent } from "@/components/calendar/event-dialog";
 import { MemberFilter } from "@/components/calendar/member-filter";
 import { MonthGrid } from "@/components/calendar/month-grid";
+import { MonthGridSkeleton } from "@/components/calendar/month-grid-skeleton";
 import { WeekGrid } from "@/components/calendar/week-grid";
 import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 import { type CalendarEvent, useEvents } from "@/hooks/use-events";
@@ -57,7 +59,7 @@ export default function HomePage() {
     return getDayEnd(dayAnchor);
   }, [view, gridDates, weekDates, dayAnchor]);
 
-  const { events, refetch } = useEvents(from, to);
+  const { events, isLoading: eventsLoading, refetch } = useEvents(from, to);
   const { members, isLoading: membersLoading } = useMembers();
 
   // Initialize visibleMemberIds once members load
@@ -303,7 +305,11 @@ export default function HomePage() {
           />
         </aside>
         <main className="flex flex-1 overflow-auto p-4">
-          {view === "month" && (
+          {view === "month" && eventsLoading && events.length === 0 && <MonthGridSkeleton />}
+          {view === "month" && !eventsLoading && filteredEvents.length === 0 && (
+            <EmptyCalendar onNewEvent={handleNewEvent} />
+          )}
+          {view === "month" && (eventsLoading ? events.length > 0 : filteredEvents.length > 0) && (
             <MonthGrid
               year={year}
               month={month}

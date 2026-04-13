@@ -70,7 +70,7 @@ function ModeButton({ label, active, disabled, onClick, children }: ModeButtonPr
 
 function ParsingSkeleton() {
   return (
-    <div className="animate-pulse space-y-2.5">
+    <div className="space-y-2.5 motion-safe:animate-pulse">
       <Skeleton className="h-5 w-48 rounded-sm" />
       <Skeleton className="h-3 w-28 rounded-sm" />
       <div className="flex gap-1.5 pt-1">
