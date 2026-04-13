@@ -4,13 +4,18 @@ import { type MouseEvent, useEffect, useRef } from "react";
 import type { CalendarEvent } from "@/hooks/use-events";
 import { isToday } from "@/lib/calendar-utils";
 import { cn } from "@/lib/utils";
+import { CurrentTimeLine } from "./current-time-line";
+import {
+  DEFAULT_SCROLL_HOUR,
+  formatHourCompact,
+  formatTimeRange,
+  HOUR_COUNT,
+  HOUR_HEIGHT,
+  HOUR_START,
+  hourTop,
+  positionEvents,
+} from "./time-grid-utils";
 import { WeekEventBlock } from "./week-event-block";
-
-const HOUR_START = 0;
-const HOUR_END = 24;
-const HOUR_COUNT = HOUR_END - HOUR_START;
-const DEFAULT_SCROLL_HOUR = 7;
-const HOUR_HEIGHT = 48;
 
 interface DayGridProps {
   date: Date;
@@ -19,80 +24,22 @@ interface DayGridProps {
   onSlotClick?: (date: Date) => void;
 }
 
-function formatHour(hour: number): string {
-  if (hour === 0) return "12 AM";
-  if (hour < 12) return `${hour} AM`;
-  if (hour === 12) return "12 PM";
-  return `${hour - 12} PM`;
-}
-
-function formatTimeRange(start: Date, end: Date): string {
-  const fmt = (d: Date) => {
-    const h = d.getHours();
-    const m = d.getMinutes();
-    const suffix = h >= 12 ? "p" : "a";
-    let hour12 = h % 12;
-    if (hour12 === 0) hour12 = 12;
-    return m > 0 ? `${hour12}:${m.toString().padStart(2, "0")}${suffix}` : `${hour12}${suffix}`;
-  };
-  return `${fmt(start)} – ${fmt(end)}`;
-}
-
-interface PositionedEvent {
-  event: CalendarEvent;
-  top: number;
-  height: number;
-  col: number;
-  totalCols: number;
-}
-
-function positionEvents(dayEvents: CalendarEvent[]): PositionedEvent[] {
-  if (dayEvents.length === 0) return [];
-
-  const sorted = [...dayEvents].sort(
-    (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime(),
-  );
-
-  const positioned: PositionedEvent[] = [];
-  const columns: { end: number }[] = [];
-
-  for (const event of sorted) {
-    const start = new Date(event.start);
-    const end = new Date(event.end);
-    const startMinutes = start.getHours() * 60 + start.getMinutes();
-    const endMinutes = end.getHours() * 60 + end.getMinutes();
-
-    const top = ((startMinutes - HOUR_START * 60) / 60) * HOUR_HEIGHT;
-    const height = Math.max(((endMinutes - startMinutes) / 60) * HOUR_HEIGHT, 12);
-
-    let col = 0;
-    while (col < columns.length && columns[col].end > startMinutes) {
-      col++;
-    }
-
-    if (col < columns.length) {
-      columns[col].end = endMinutes;
-    } else {
-      columns.push({ end: endMinutes });
-    }
-
-    positioned.push({ event, top, height, col, totalCols: 0 });
-  }
-
-  const totalCols = columns.length;
-  for (const p of positioned) {
-    p.totalCols = totalCols;
-  }
-
-  return positioned;
-}
-
 export function DayGrid({ date, events, onEventClick, onSlotClick }: DayGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const today = isToday(date);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally runs on mount only
   useEffect(() => {
     if (!scrollRef.current) return;
-    scrollRef.current.scrollTop = DEFAULT_SCROLL_HOUR * HOUR_HEIGHT;
+    if (today) {
+      const now = new Date();
+      const minutes = now.getHours() * 60 + now.getMinutes();
+      const topPx = ((minutes - HOUR_START * 60) / 60) * HOUR_HEIGHT;
+      const viewport = scrollRef.current.clientHeight;
+      scrollRef.current.scrollTop = Math.max(0, topPx - viewport / 3);
+    } else {
+      scrollRef.current.scrollTop = DEFAULT_SCROLL_HOUR * HOUR_HEIGHT;
+    }
   }, []);
 
   function handleSlotClick(e: MouseEvent<HTMLDivElement>) {
@@ -100,31 +47,37 @@ export function DayGrid({ date, events, onEventClick, onSlotClick }: DayGridProp
     const rect = e.currentTarget.getBoundingClientRect();
     const offsetY = e.clientY - rect.top;
     const hour = Math.floor(offsetY / HOUR_HEIGHT) + HOUR_START;
-    const clampedHour = Math.max(HOUR_START, Math.min(hour, HOUR_END - 1));
+    const clampedHour = Math.max(HOUR_START, Math.min(hour, 23));
     const clickDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), clampedHour);
     onSlotClick(clickDate);
   }
 
   const positioned = positionEvents(events);
   const hours = Array.from({ length: HOUR_COUNT }, (_, i) => HOUR_START + i);
-  const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
+  const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Day header */}
-      <div className="grid border-b" style={{ gridTemplateColumns: "60px 1fr" }}>
-        <div className="border-r" />
-        <div className={cn("border-r px-2 py-1 text-center", isToday(date) && "bg-primary/5")}>
-          <div className="text-xs text-muted-foreground">{dayName}</div>
-          <div
+      <div className="grid border-b border-rule" style={{ gridTemplateColumns: "60px 1fr" }}>
+        <div />
+        <div className="flex flex-col items-start gap-0.5 px-3 py-3">
+          <span
             className={cn(
-              "text-sm font-medium",
-              isToday(date) &&
-                "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground",
+              "font-display text-xs italic tracking-wide md:text-sm",
+              today ? "text-accent" : "text-muted-foreground",
+            )}
+          >
+            {dayName}
+          </span>
+          <span
+            className={cn(
+              "font-display text-2xl font-light leading-none tracking-tight md:text-3xl",
+              today && "italic font-medium text-accent",
             )}
           >
             {date.getDate()}
-          </div>
+          </span>
         </div>
       </div>
 
@@ -135,14 +88,14 @@ export function DayGrid({ date, events, onEventClick, onSlotClick }: DayGridProp
           style={{ gridTemplateColumns: "60px 1fr", height: HOUR_COUNT * HOUR_HEIGHT }}
         >
           {/* Time gutter */}
-          <div className="relative border-r">
+          <div className="relative">
             {hours.map((hour) => (
               <div
                 key={hour}
-                className="absolute right-2 -translate-y-1/2 text-[10px] text-muted-foreground"
-                style={{ top: (hour - HOUR_START) * HOUR_HEIGHT }}
+                className="absolute right-2 -translate-y-1/2 font-display text-[11px] italic tabular-nums text-ink-faint"
+                style={{ top: hourTop(hour) }}
               >
-                {formatHour(hour)}
+                {formatHourCompact(hour)}
               </div>
             ))}
           </div>
@@ -151,7 +104,7 @@ export function DayGrid({ date, events, onEventClick, onSlotClick }: DayGridProp
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: day column contains interactive event buttons */}
           {/* biome-ignore lint/a11y/noStaticElementInteractions: day column is a grid cell with nested buttons */}
           <div
-            className={cn("relative border-r", isToday(date) && "bg-primary/5")}
+            className={cn("relative", today && "bg-paper-warm/40")}
             onClick={(e) => {
               if ((e.target as HTMLElement).closest("button")) return;
               handleSlotClick(e);
@@ -160,10 +113,12 @@ export function DayGrid({ date, events, onEventClick, onSlotClick }: DayGridProp
             {hours.map((hour) => (
               <div
                 key={hour}
-                className="absolute left-0 right-0 border-t border-border/50"
-                style={{ top: (hour - HOUR_START) * HOUR_HEIGHT }}
+                className="absolute left-0 right-0 border-t border-rule/60"
+                style={{ top: hourTop(hour) }}
               />
             ))}
+
+            {today && <CurrentTimeLine />}
 
             {positioned.map((p) => {
               const color = p.event.assignees[0]?.color ?? "#6b7280";

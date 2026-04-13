@@ -4,13 +4,20 @@ import { type MouseEvent, useEffect, useRef } from "react";
 import type { CalendarEvent } from "@/hooks/use-events";
 import { isToday } from "@/lib/calendar-utils";
 import { cn } from "@/lib/utils";
+import { CurrentTimeLine } from "./current-time-line";
+import {
+  DEFAULT_SCROLL_HOUR,
+  dateKey,
+  formatHourCompact,
+  formatTimeRange,
+  HOUR_COUNT,
+  HOUR_HEIGHT,
+  HOUR_START,
+  hourTop,
+  positionEvents,
+} from "./time-grid-utils";
 import { WeekEventBlock } from "./week-event-block";
 
-const HOUR_START = 0;
-const HOUR_END = 24;
-const HOUR_COUNT = HOUR_END - HOUR_START;
-const DEFAULT_SCROLL_HOUR = 7;
-const HOUR_HEIGHT = 48;
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 interface WeekGridProps {
@@ -18,80 +25,6 @@ interface WeekGridProps {
   events: CalendarEvent[];
   onEventClick?: (eventId: string) => void;
   onSlotClick?: (date: Date) => void;
-}
-
-function dateKey(date: Date): string {
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-}
-
-function formatHour(hour: number): string {
-  if (hour === 0) return "12 AM";
-  if (hour < 12) return `${hour} AM`;
-  if (hour === 12) return "12 PM";
-  return `${hour - 12} PM`;
-}
-
-function formatTimeRange(start: Date, end: Date): string {
-  const fmt = (d: Date) => {
-    const h = d.getHours();
-    const m = d.getMinutes();
-    const suffix = h >= 12 ? "p" : "a";
-    let hour12 = h % 12;
-    if (hour12 === 0) hour12 = 12;
-    return m > 0 ? `${hour12}:${m.toString().padStart(2, "0")}${suffix}` : `${hour12}${suffix}`;
-  };
-  return `${fmt(start)} – ${fmt(end)}`;
-}
-
-interface PositionedEvent {
-  event: CalendarEvent;
-  top: number;
-  height: number;
-  col: number;
-  totalCols: number;
-}
-
-function positionEvents(dayEvents: CalendarEvent[]): PositionedEvent[] {
-  if (dayEvents.length === 0) return [];
-
-  const sorted = [...dayEvents].sort(
-    (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime(),
-  );
-
-  const positioned: PositionedEvent[] = [];
-  const columns: { end: number }[] = [];
-
-  for (const event of sorted) {
-    const start = new Date(event.start);
-    const end = new Date(event.end);
-    const startMinutes = start.getHours() * 60 + start.getMinutes();
-    const endMinutes = end.getHours() * 60 + end.getMinutes();
-
-    const top = ((startMinutes - HOUR_START * 60) / 60) * HOUR_HEIGHT;
-    const height = Math.max(((endMinutes - startMinutes) / 60) * HOUR_HEIGHT, 12);
-
-    // Find first available column
-    let col = 0;
-    while (col < columns.length && columns[col].end > startMinutes) {
-      col++;
-    }
-
-    if (col < columns.length) {
-      columns[col].end = endMinutes;
-    } else {
-      columns.push({ end: endMinutes });
-    }
-
-    positioned.push({ event, top, height, col, totalCols: 0 });
-  }
-
-  // Set totalCols for all events in this day
-  const totalCols = columns.length;
-  for (const p of positioned) {
-    p.totalCols = totalCols;
-  }
-
-  return positioned;
 }
 
 export function WeekGrid({ weekDates, events, onEventClick, onSlotClick }: WeekGridProps) {
@@ -110,10 +43,21 @@ export function WeekGrid({ weekDates, events, onEventClick, onSlotClick }: WeekG
     }
   }
 
-  // Auto-scroll to ~7 AM on mount
+  // Auto-scroll on mount: if today is in this week, scroll so current time
+  // sits ~1/3 from the top of the viewport. Otherwise default to 7am.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally runs on mount only
   useEffect(() => {
     if (!scrollRef.current) return;
-    scrollRef.current.scrollTop = DEFAULT_SCROLL_HOUR * HOUR_HEIGHT;
+    const todayInView = weekDates.some((d) => isToday(d));
+    if (todayInView) {
+      const now = new Date();
+      const minutes = now.getHours() * 60 + now.getMinutes();
+      const topPx = ((minutes - HOUR_START * 60) / 60) * HOUR_HEIGHT;
+      const viewport = scrollRef.current.clientHeight;
+      scrollRef.current.scrollTop = Math.max(0, topPx - viewport / 3);
+    } else {
+      scrollRef.current.scrollTop = DEFAULT_SCROLL_HOUR * HOUR_HEIGHT;
+    }
   }, []);
 
   function handleSlotClick(dayDate: Date, e: MouseEvent<HTMLDivElement>) {
@@ -121,7 +65,7 @@ export function WeekGrid({ weekDates, events, onEventClick, onSlotClick }: WeekG
     const rect = e.currentTarget.getBoundingClientRect();
     const offsetY = e.clientY - rect.top;
     const hour = Math.floor(offsetY / HOUR_HEIGHT) + HOUR_START;
-    const clampedHour = Math.max(HOUR_START, Math.min(hour, HOUR_END - 1));
+    const clampedHour = Math.max(HOUR_START, Math.min(hour, 23));
     const date = new Date(
       dayDate.getFullYear(),
       dayDate.getMonth(),
@@ -136,25 +80,40 @@ export function WeekGrid({ weekDates, events, onEventClick, onSlotClick }: WeekG
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Day headers */}
-      <div className="grid border-b" style={{ gridTemplateColumns: "60px repeat(7, 1fr)" }}>
-        <div className="border-r" />
-        {weekDates.map((date, i) => (
-          <div
-            key={date.toISOString()}
-            className={cn("border-r px-2 py-1 text-center", isToday(date) && "bg-primary/5")}
-          >
-            <div className="text-xs text-muted-foreground">{DAY_NAMES[i]}</div>
+      <div
+        className="grid border-b border-rule"
+        style={{ gridTemplateColumns: "60px repeat(7, 1fr)" }}
+      >
+        <div />
+        {weekDates.map((date, i) => {
+          const today = isToday(date);
+          return (
             <div
+              key={date.toISOString()}
               className={cn(
-                "text-sm font-medium",
-                isToday(date) &&
-                  "mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground",
+                "flex flex-col items-start gap-0.5 px-3 py-3",
+                i < weekDates.length - 1 && "border-r border-rule",
               )}
             >
-              {date.getDate()}
+              <span
+                className={cn(
+                  "font-display text-xs italic tracking-wide md:text-sm",
+                  today ? "text-accent" : "text-muted-foreground",
+                )}
+              >
+                {DAY_NAMES[i]}
+              </span>
+              <span
+                className={cn(
+                  "font-display text-2xl font-light leading-none tracking-tight md:text-3xl",
+                  today && "italic font-medium text-accent",
+                )}
+              >
+                {date.getDate()}
+              </span>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Scrollable time grid */}
@@ -167,30 +126,35 @@ export function WeekGrid({ weekDates, events, onEventClick, onSlotClick }: WeekG
           }}
         >
           {/* Time gutter */}
-          <div className="relative border-r">
+          <div className="relative">
             {hours.map((hour) => (
               <div
                 key={hour}
-                className="absolute right-2 -translate-y-1/2 text-[10px] text-muted-foreground"
-                style={{ top: (hour - HOUR_START) * HOUR_HEIGHT }}
+                className="absolute right-2 -translate-y-1/2 font-display text-[11px] italic tabular-nums text-ink-faint"
+                style={{ top: hourTop(hour) }}
               >
-                {formatHour(hour)}
+                {formatHourCompact(hour)}
               </div>
             ))}
           </div>
 
           {/* Day columns */}
-          {weekDates.map((date) => {
+          {weekDates.map((date, i) => {
             const dayKey = dateKey(date);
             const dayEvents = eventsByDay.get(dayKey) ?? [];
             const positioned = positionEvents(dayEvents);
+            const today = isToday(date);
 
             return (
               // biome-ignore lint/a11y/useKeyWithClickEvents: week column contains interactive event buttons
               // biome-ignore lint/a11y/noStaticElementInteractions: week column is a grid cell with nested buttons
               <div
                 key={date.toISOString()}
-                className={cn("relative border-r", isToday(date) && "bg-primary/5")}
+                className={cn(
+                  "relative",
+                  i < weekDates.length - 1 && "border-r border-rule",
+                  today && "bg-paper-warm/40",
+                )}
                 onClick={(e) => {
                   if ((e.target as HTMLElement).closest("button")) return;
                   handleSlotClick(date, e);
@@ -200,10 +164,13 @@ export function WeekGrid({ weekDates, events, onEventClick, onSlotClick }: WeekG
                 {hours.map((hour) => (
                   <div
                     key={hour}
-                    className="absolute left-0 right-0 border-t border-border/50"
-                    style={{ top: (hour - HOUR_START) * HOUR_HEIGHT }}
+                    className="absolute left-0 right-0 border-t border-rule/60"
+                    style={{ top: hourTop(hour) }}
                   />
                 ))}
+
+                {/* Current time line (only in today's column) */}
+                {today && <CurrentTimeLine />}
 
                 {/* Events */}
                 {positioned.map((p) => {

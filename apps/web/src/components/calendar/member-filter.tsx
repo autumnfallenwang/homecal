@@ -1,14 +1,55 @@
 "use client";
 
-import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Member } from "@/hooks/use-members";
+import { cn } from "@/lib/utils";
 
 interface MemberFilterProps {
   members: Member[];
   isLoading: boolean;
   visibleMemberIds: Set<string>;
   onToggle: (memberId: string) => void;
+  onOnlyMe?: () => void;
+  onEveryone?: () => void;
+}
+
+function initial(name: string): string {
+  return name.trim().charAt(0).toUpperCase() || "·";
+}
+
+interface MemberChipProps {
+  member: Member;
+  checked: boolean;
+  onClick: () => void;
+}
+
+function MemberChip({ member, checked, onClick }: MemberChipProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={checked}
+      className={cn(
+        "group inline-flex items-center gap-2.5 rounded-full p-1 pr-3.5 transition-all",
+        checked ? "bg-paper-warm/70 hover:bg-paper-warm" : "opacity-45 hover:opacity-90",
+      )}
+    >
+      <span
+        className={cn(
+          "grid h-7 w-7 place-items-center rounded-full font-display text-xs font-medium transition-all",
+          checked ? "text-white" : "bg-background ring-1 ring-inset",
+        )}
+        style={
+          checked
+            ? { backgroundColor: member.color }
+            : { color: member.color, borderColor: member.color }
+        }
+      >
+        {initial(member.name)}
+      </span>
+      <span className="text-sm font-medium">{member.name}</span>
+    </button>
+  );
 }
 
 export function MemberFilter({
@@ -16,43 +57,60 @@ export function MemberFilter({
   isLoading,
   visibleMemberIds,
   onToggle,
+  onOnlyMe,
+  onEveryone,
 }: MemberFilterProps) {
   if (isLoading) {
     return (
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium text-muted-foreground">Family</h3>
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-4 w-4 rounded" />
-          <Skeleton className="h-4 w-20" />
-        </div>
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-4 w-4 rounded" />
-          <Skeleton className="h-4 w-20" />
-        </div>
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-4 w-4 rounded" />
-          <Skeleton className="h-4 w-20" />
+      <div className="flex flex-col gap-3 p-4">
+        <Skeleton className="h-4 w-16" />
+        <div className="flex flex-wrap gap-2 lg:flex-col">
+          <Skeleton className="h-9 w-28 rounded-full" />
+          <Skeleton className="h-9 w-24 rounded-full" />
+          <Skeleton className="h-9 w-32 rounded-full" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <h3 className="text-sm font-medium text-muted-foreground">Family</h3>
-      {members.map((member) => (
-        <div key={member.id} className="flex cursor-pointer items-center gap-2">
-          <Checkbox
-            id={`member-${member.id}`}
+    <div className="flex flex-col gap-3 px-4 py-3 lg:gap-4 lg:py-6">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="font-display text-sm italic tracking-wide text-muted-foreground">Family</h3>
+        {(onOnlyMe || onEveryone) && (
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+            {onOnlyMe && (
+              <button
+                type="button"
+                onClick={onOnlyMe}
+                className="rounded-full px-1 transition-colors hover:text-accent"
+              >
+                Only me
+              </button>
+            )}
+            {onOnlyMe && onEveryone && <span className="opacity-50">·</span>}
+            {onEveryone && (
+              <button
+                type="button"
+                onClick={onEveryone}
+                className="rounded-full px-1 transition-colors hover:text-accent"
+              >
+                Everyone
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="flex flex-row flex-wrap gap-1.5 lg:flex-col lg:gap-1">
+        {members.map((member) => (
+          <MemberChip
+            key={member.id}
+            member={member}
             checked={visibleMemberIds.has(member.id)}
-            onCheckedChange={() => onToggle(member.id)}
+            onClick={() => onToggle(member.id)}
           />
-          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: member.color }} />
-          <label htmlFor={`member-${member.id}`} className="cursor-pointer text-sm">
-            {member.name}
-          </label>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

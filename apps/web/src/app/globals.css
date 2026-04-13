@@ -183,3 +183,43 @@
     font-family: var(--font-display), Georgia, "Times New Roman", serif;
   }
 }
+
+/* 3-bar equalizer for voice recording indicator */
+@keyframes eq-bar-a {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+@keyframes eq-bar-b {
+  0%,
+  100% {
+    transform: scaleY(0.9);
+  }
+  50% {
+    transform: scaleY(0.3);
+  }
+}
+@keyframes eq-bar-c {
+  0%,
+  100% {
+    transform: scaleY(0.6);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .eq-bar-a {
+    animation: eq-bar-a 1.1s ease-in-out infinite;
+  }
+  .eq-bar-b {
+    animation: eq-bar-b 0.9s ease-in-out infinite;
+  }
+  .eq-bar-c {
+    animation: eq-bar-c 1.3s ease-in-out infinite;
+  }
+}

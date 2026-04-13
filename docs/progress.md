@@ -124,9 +124,9 @@ Visual redesign of `apps/web` to the Warm Editorial aesthetic (Fraunces + Inter 
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 53 | Week/Day grid polish | Not started | Fraunces italic time gutter (compressed `6` not `6:00`), terracotta current-time line + gutter dot (pulse w/ `prefers-reduced-motion` guard), 1px inner shadow on overlapped blocks, scroll-to-now on "today" |
-| 54 | Member filter redesign | Not started | `member-filter.tsx`: collapse to horizontal chip row on `<lg`, Fraunces avatar initials in member-colored circles, filled vs 1px outline states, "Only me" / "Everyone" quick toggles |
-| 55 | Quick Add popover redesign | Not started | `quick-add-popover.tsx`: single large Fraunces-placeholder input, 4 circular icon buttons (type/voice/image/ics), animated 3-bar equalizer during voice capture, skeleton preview of parsed event card before dialog opens |
+| 53 | Week/Day grid polish | ✅ Done | New shared `time-grid-utils.ts` (extracted duplicated `positionEvents`, constants, `formatTimeRange`, + new `formatHourCompact` — Fantastical-style `12a/1/2/.../11/12p/...` with am/pm only at boundaries, `hourTop`, `dateTop`, `dateKey`). New `current-time-line.tsx` — 1px terracotta absolute line w/ gutter dot, `setInterval` 30s refresh, `motion-safe:animate-pulse` on the dot. `week-event-block.tsx` rewrite: `color-mix` 16% tint + 2px colored left border + foreground text + `inset 0 0 0 1px rgb(0 0 0 / 0.06)` stack shadow, tabular time label, dotted-underline series. `week-grid.tsx` + `day-grid.tsx`: Fraunces italic day-name header + Fraunces numeral (italic accent on today), warm `bg-paper-warm/40` today tint, italic compact gutter labels, `border-rule/60` hour lines, `<CurrentTimeLine>` in today's column, scroll-to-now auto-centers current time at 1/3 of viewport when today is visible (else 7am fallback). Browser-verified month/week/day at 1440×900 |
+| 54 | Member filter redesign | ✅ Done | `member-filter.tsx` rewritten with `MemberChip` subcomponent — 28px avatar in Fraunces initial, filled member color when checked / 1px ring + 45% opacity when unchecked, name in Inter Tight. Fraunces italic "Family" heading + "Only me · Everyone" quick toggles in header. `flex-wrap` horizontal row on `<lg`, `lg:flex-col` vertical stack on desktop. `page.tsx`: removed `hidden lg:block`, sidebar now responsive (`border-b lg:w-60 lg:border-r`) — visible on all breakpoints. Added `handleOnlyMe` (sets to current user id) + `handleEveryone` handlers. Browser-verified at 1440 (vertical sidebar) and 390 (horizontal chip row) |
+| 55 | Quick Add popover redesign | ✅ Done | `quick-add-popover.tsx` rewritten: large borderless text input with Fraunces italic "What's happening?" placeholder, 3 circular `ModeButton`s (Mic/Camera/FileText) + "Parse" submit with Sparkles, `ParsingSkeleton` replaces input zone while smart/image parser is running (title + meta + chip rows). `Equalizer` subcomponent with 3 scaled bars animated via new `eq-bar-a/b/c` keyframes in `globals.css` (wrapped in `prefers-reduced-motion: no-preference`). New "+ New event" trigger button is a rounded-full terracotta pill. Replaced `autoFocus` attribute with `useEffect`+ref focus pattern to satisfy biome a11y lint. "Or create manually →" bottom link in Fraunces italic. Browser-verified at 1440×900 |
 
 ### Phase 13c — Event dialog, states, a11y
 
@@ -208,7 +208,7 @@ Reframe `/admin` as **Family** — warm portrait grid of member cards + Radix `S
 
 ## What's Next
 
-**Phase 13a complete** — tasks 49 (tokens), 50 (header), 51 (month grid), 52 (event pills) all done. Next: pick a direction — 13b (week/day/quick-add/member filter), 13c (dialog/states/a11y), Phase 14 (Today view), or Phase 15 (Family page). Phase 13a is the token + foundation; everything downstream inherits it.
+**Phase 13b complete** — tasks 53 (week/day), 54 (member filter), 55 (quick-add) all done. Next: Phase 13c (56 event dialog → 57 states → 58 a11y → 58a auth screens → 58b settings+shells → 58c misc audit), or jump to Phase 14 (Today view) / Phase 15 (Family page) which both depend only on 13a tokens.
 
 ## Reference Docs
 

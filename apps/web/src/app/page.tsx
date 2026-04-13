@@ -161,6 +161,15 @@ export default function HomePage() {
     [members],
   );
 
+  const handleOnlyMe = useCallback(() => {
+    if (!session?.user?.id) return;
+    setVisibleMemberIds(new Set([session.user.id]));
+  }, [session?.user?.id]);
+
+  const handleEveryone = useCallback(() => {
+    setVisibleMemberIds(new Set(members.map((m) => m.id)));
+  }, [members]);
+
   const handleSmartInput = useCallback(async (text: string): Promise<boolean> => {
     setSmartInputLoading(true);
     try {
@@ -282,13 +291,15 @@ export default function HomePage() {
         smartInputLoading={smartInputLoading}
         imageInputLoading={imageInputLoading}
       />
-      <div className="flex flex-1 overflow-hidden">
-        <aside className="hidden w-60 border-r p-4 lg:block">
+      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+        <aside className="border-b border-rule lg:w-60 lg:shrink-0 lg:border-b-0 lg:border-r">
           <MemberFilter
             members={members}
             isLoading={membersLoading}
             visibleMemberIds={activeMemberIds}
             onToggle={handleToggleMember}
+            onOnlyMe={handleOnlyMe}
+            onEveryone={handleEveryone}
           />
         </aside>
         <main className="flex flex-1 overflow-auto p-4">

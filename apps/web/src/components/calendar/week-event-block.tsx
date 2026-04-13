@@ -1,6 +1,7 @@
 "use client";
 
 import type React from "react";
+import { cn } from "@/lib/utils";
 
 interface WeekEventBlockProps {
   title: string;
@@ -25,26 +26,37 @@ export function WeekEventBlock({
   width,
   onClick,
 }: WeekEventBlockProps) {
+  const style: React.CSSProperties = {
+    top,
+    height,
+    left,
+    width,
+    backgroundColor: `color-mix(in oklab, ${color} 16%, var(--background))`,
+    borderLeftColor: color,
+    boxShadow: "inset 0 0 0 1px rgb(0 0 0 / 0.06)",
+  };
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className="absolute overflow-hidden rounded px-1.5 py-0.5 text-left text-xs font-medium hover:opacity-80 transition-opacity"
-      style={{
-        top,
-        height,
-        left,
-        width,
-        backgroundColor: `${color}20`,
-        color,
-      }}
+      style={style}
       title={title}
+      className="absolute overflow-hidden rounded-[4px] border-l-2 px-1.5 py-1 text-left text-[11.5px] leading-tight text-foreground transition-all hover:z-20 hover:ring-1 hover:ring-foreground/25"
     >
-      <span className="block truncate">
-        {isSeries && "↻ "}
+      <span
+        className={cn(
+          "block truncate font-medium",
+          isSeries && "underline decoration-dotted underline-offset-2 decoration-foreground/40",
+        )}
+      >
         {title}
       </span>
-      {height >= 48 && <span className="block truncate text-[10px] opacity-70">{timeLabel}</span>}
+      {height >= 42 && (
+        <span className="mt-0.5 block truncate text-[10px] tabular-nums text-muted-foreground">
+          {timeLabel}
+        </span>
+      )}
     </button>
   );
 }
