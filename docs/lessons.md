@@ -49,3 +49,15 @@ Three things that aren't obvious from the docs:
 **Drawback**: the spec drifts from reality if a route changes without updating the spec file. Mitigation: integration test asserts presence of expected paths so adding a new route surfaces a failure as soon as the test list is updated, and the spec file lives alongside the routes in `apps/api/src/openapi/`.
 
 **Lesson**: when tooling demands a full handler rewrite for a docs feature, write the docs by hand and revisit if/when a real reason to migrate appears (e.g. needing per-handler OpenAPI overrides at scale).
+
+### Service account = user + throwaway password (GitHub PAT mental model, noted 2026-04-13, Phase 17)
+
+**Question that kept coming up**: "why do we need both a service account AND an API key? pick one."
+
+**Answer**: HomeCal uses the GitHub PAT pattern. A "service account" is just a normal user record with `isService=true`. The password is 32 bytes of `randomBytes` — generated at create time, hashed, and **never returned or used again**. The real credential is the API key minted *under that user*. The user record exists as a permission anchor — its `role` determines whether keys minted under it can hit admin-gated routes (mirrors GitHub where a PAT inherits the owning user's permissions).
+
+**Why not bearer tokens on a shared user?** Bearer sessions are browser-shaped: short TTL, cookie-flavored, tied to sign-in flows. Service callers need long-lived, revocable-per-caller credentials where rotating one doesn't kick the other callers out. That's what `apiKey` rows give you: name, owner, last-request, request-count, enabled flag — all per key.
+
+**Why the throwaway password then?** Better Auth's `createUser` requires a password field. Rather than carving out a special "no-password user" path, generate garbage and discard it. `isService=true` + the `/api/users` filter (`WHERE isService=false`) hides the user from the family calendar so it never shows up as an assignee.
+
+**The invariant**: one service user per calling app, N keys per service. Rotation is "mint new, migrate caller, delete old" — the old key authenticates during the grace window, no scheduled-deletion complexity.

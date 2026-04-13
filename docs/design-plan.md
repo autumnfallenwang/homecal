@@ -465,6 +465,22 @@ Why not a ribbon/pill: too AI-default. Italic kicker + terracotta dot is typogra
 
 83. Today view holiday line + settings UI — `today-view.tsx` renders an italic kicker (`"memorial day — observed in us"`) between the weekday label and the massive date hero, only when `today` is a holiday. Count is unaffected — holidays never appear in "N events today". In the `calendar-header` settings modal, add a new **Holidays** section: Fraunces italic label, a multi-select of country codes with a small searchable list sourced from `date-holidays`'s `getCountries()` (about 200 entries, lazy-loaded), default pulled from locale. Save goes through the task-81 PATCH endpoint. Also flag a "Show observances too" checkbox but keep it wired to a no-op for v1 (future-proofing without shipping the feature). Browser verification at 1440/1024/768/390px on a known holiday date.
 
+### Phase 20 — Public API ergonomics for external apps (placeholder)
+
+**Motivation**: Phase 16 opened HomeCal to machine callers (apiKey plugin, rate limit, `/api/v1`, OpenAPI spec) and Phase 17 built the management UI. Actually *using* the API as an external service still has sharp edges — e.g., "give me all events for user X" today requires `GET /users` then `GET /events?from=...&to=...` then a client-side filter on `assignees[]`, with a privacy-model caveat that a non-admin key can't see other users' private events at all.
+
+**Rough scope** (to be refined in a real planning pass):
+- **Filter parameters on list endpoints** — `userIds` on `/events` (mirroring `/events/today`), `ownerId`, maybe `assigneeId`, `limit`/`cursor` pagination
+- **Resource-per-user views** — e.g. `GET /users/{id}/events?from=&to=` as a first-class path so the natural URL exists
+- **Privacy model for service accounts** — decide whether a service account key can bypass the `private` filter when its role is admin, or whether private events are strictly hidden regardless of key scope (probably the latter — service accounts aren't humans)
+- **Bulk endpoints** — create N events in one call, fetch several users in one call, avoiding chatty round-trips
+- **Consistent error envelope** — standardize `{ error, code, details }` across every route so clients can branch on `code`
+- **Rate-limit header documentation** in the OpenAPI spec + concrete retry guidance
+- **Typed client generation sanity check** — run `openapi-typescript` + `openapi-generator` against the spec from a fresh repo and note what's awkward; that's the real usability test
+- **SDK / example** — tiny Node snippet in `docs/` showing "list today's dinner plans for the kids" end-to-end, so new external apps have a copy-paste starting point
+
+**Deliverables** (TBD — tasks numbered when this phase is planned for real): a set of small focused PRs, each with tests + OpenAPI spec updates in the same commit.
+
 ### Phase 19 — Future Enhancements (deferred)
 - iOS push via APNs — enable when Apple Developer account is available
 - Web Push notifications — Service Worker + Web Push API (add if users want desktop alerts)

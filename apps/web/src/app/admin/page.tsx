@@ -1,23 +1,50 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FamilyCard, type FamilyMember } from "@/components/admin/family-card";
 import { InviteCard } from "@/components/admin/invite-card";
 import { MemberDrawer } from "@/components/admin/member-drawer";
+import { ServiceAccountDrawer } from "@/components/admin/service-account-drawer";
+import { ServicesGrid } from "@/components/admin/services-grid";
 import { Button } from "@/components/ui/button";
 import { useAuthRedirect } from "@/hooks/use-auth-redirect";
+import { type ServiceAccount, useServiceAccounts } from "@/hooks/use-service-accounts";
 import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
+
+type AdminTab = "family" | "services";
 
 export default function AdminPage() {
   const { session, isPending } = useAuthRedirect(true);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tab: AdminTab = searchParams.get("tab") === "services" ? "services" : "family";
+
   const [loading, setLoading] = useState(true);
   const [allUsers, setAllUsers] = useState<FamilyMember[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState<FamilyMember | "new" | null>(null);
+  const [selectedService, setSelectedService] = useState<ServiceAccount | "new" | null>(null);
 
   const isAdmin = session?.user?.role === "admin";
+  const {
+    services,
+    isLoading: servicesLoading,
+    error: servicesError,
+    refetch: refetchServices,
+  } = useServiceAccounts(isAdmin && tab === "services");
+
+  const setTab = useCallback(
+    (next: AdminTab) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === "family") params.delete("tab");
+      else params.set("tab", next);
+      const qs = params.toString();
+      router.replace(qs ? `/admin?${qs}` : "/admin", { scroll: false });
+    },
+    [router, searchParams],
+  );
 
   useEffect(() => {
     if (!isPending && session && !isAdmin) {
@@ -37,16 +64,20 @@ export default function AdminPage() {
         for (const m of membersRes as { id: string; color: string }[]) {
           colorMap.set(m.id, m.color);
         }
+        // `/api/users` already filters out service accounts — using its id set
+        // here hides them from the Family tab without a separate query.
         setAllUsers(
-          adminRes.data.users.map((u) => ({
-            id: u.id,
-            name: u.name,
-            email: u.email,
-            role: u.role ?? "user",
-            banned: u.banned ?? false,
-            color: colorMap.get(u.id) ?? "#6b7280",
-            createdAt: u.createdAt.toString(),
-          })),
+          adminRes.data.users
+            .filter((u) => colorMap.has(u.id))
+            .map((u) => ({
+              id: u.id,
+              name: u.name,
+              email: u.email,
+              role: u.role ?? "user",
+              banned: u.banned ?? false,
+              color: colorMap.get(u.id) ?? "#6b7280",
+              createdAt: u.createdAt.toString(),
+            })),
         );
       }
     } catch {
@@ -61,12 +92,33 @@ export default function AdminPage() {
   }, [isAdmin, fetchUsers]);
 
   // Sort: current user first, then alphabetically.
-  const sortedUsers = [...allUsers].sort((a, b) => {
-    const selfId = session?.user?.id;
-    if (a.id === selfId) return -1;
-    if (b.id === selfId) return 1;
-    return a.name.localeCompare(b.name);
-  });
+  const sortedUsers = useMemo(
+    () =>
+      [...allUsers].sort((a, b) => {
+        const selfId = session?.user?.id;
+        if (a.id === selfId) return -1;
+        if (b.id === selfId) return 1;
+        return a.name.localeCompare(b.name);
+      }),
+    [allUsers, session?.user?.id],
+  );
+
+  let heroSubtitle: string;
+  if (tab === "family") {
+    if (loading) {
+      heroSubtitle = "loading…";
+    } else {
+      const s = allUsers.length === 1 ? "" : "s";
+      heroSubtitle = `${allUsers.length} member${s} · managed by ${session?.user?.name ?? "you"}`;
+    }
+  } else if (servicesLoading) {
+    heroSubtitle = "loading…";
+  } else {
+    const s = services.length === 1 ? "" : "s";
+    heroSubtitle = `${services.length} service${s} · machine callers`;
+  }
+
+  const heroTitle = tab === "family" ? "Family" : "Services";
 
   if (isPending || !session || !isAdmin) {
     return null;
@@ -75,19 +127,16 @@ export default function AdminPage() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-10 md:px-10 md:py-12">
       {/* ─── Hero ─── */}
-      <header className="mb-10 flex items-end justify-between gap-4">
+      <header className="mb-6 flex items-end justify-between gap-4">
         <div>
           <h1
             className="font-display font-light leading-[0.9] tracking-tight"
             style={{ fontSize: "clamp(3rem, 7vw, 5.5rem)" }}
           >
-            Family
-            <span className="font-display italic text-accent">,</span>
+            {heroTitle}
           </h1>
           <p className="mt-2 font-display text-base italic text-muted-foreground md:text-lg">
-            {loading
-              ? "loading…"
-              : `${allUsers.length} member${allUsers.length === 1 ? "" : "s"} · managed by ${session.user.name}`}
+            {heroSubtitle}
           </p>
         </div>
         <Button
@@ -100,14 +149,37 @@ export default function AdminPage() {
         </Button>
       </header>
 
-      {error && (
+      {/* ─── Tab switcher ─── */}
+      <div
+        className="mb-8 inline-flex items-center gap-1 rounded-full border border-rule bg-card p-1"
+        role="tablist"
+      >
+        {(["family", "services"] as const).map((key) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={cn(
+              "rounded-full px-4 py-1.5 font-display text-sm capitalize transition-colors",
+              tab === key
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {key}
+          </button>
+        ))}
+      </div>
+
+      {(error || servicesError) && (
         <div className="mb-6 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-          {error}
+          {error ?? servicesError}
         </div>
       )}
 
-      {/* ─── Portrait grid ─── */}
-      {loading ? (
+      {tab === "family" && loading && (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div
@@ -117,7 +189,8 @@ export default function AdminPage() {
             />
           ))}
         </div>
-      ) : (
+      )}
+      {tab === "family" && !loading && (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {sortedUsers.map((user) => (
             <FamilyCard
@@ -130,11 +203,20 @@ export default function AdminPage() {
           <InviteCard onClick={() => setSelectedMember("new")} />
         </div>
       )}
+      {tab === "services" && (
+        <ServicesGrid services={services} loading={servicesLoading} onOpen={setSelectedService} />
+      )}
 
       <MemberDrawer
         member={selectedMember}
         onClose={() => setSelectedMember(null)}
         onSaved={() => void fetchUsers()}
+      />
+
+      <ServiceAccountDrawer
+        service={selectedService}
+        onClose={() => setSelectedService(null)}
+        onSaved={() => void refetchServices()}
       />
     </div>
   );

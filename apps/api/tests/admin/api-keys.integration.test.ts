@@ -215,6 +215,11 @@ describe("GET /api/admin/api-keys", () => {
       expect(row).toHaveProperty("start");
       expect(row).toHaveProperty("prefix");
       expect(row).toHaveProperty("userId");
+      // Phase 17 task 75: usage metadata surfaced on every row
+      expect(row).toHaveProperty("requestCount");
+      expect(row).toHaveProperty("lastRequest");
+      expect(row).toHaveProperty("enabled");
+      expect(row).toHaveProperty("name");
     }
   });
 
@@ -273,5 +278,95 @@ describe("DELETE /api/admin/api-keys/:id", () => {
       headers: { Cookie: admin.cookie },
     });
     expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /api/admin/api-keys/:id/rotate", () => {
+  it("returns 401 without auth", async () => {
+    const res = await req("/api/admin/api-keys/abc/rotate", { method: "POST" });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 403 for non-admin users", async () => {
+    await createUser("Admin", "admin@test.com");
+    const bob = await createUser("Bob", "bob@test.com");
+    const res = await req("/api/admin/api-keys/00000000-0000-0000-0000-000000000000/rotate", {
+      method: "POST",
+      headers: { Cookie: bob.cookie },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 404 for unknown key", async () => {
+    const admin = await createUser("Admin", "admin@test.com");
+    const res = await req("/api/admin/api-keys/00000000-0000-0000-0000-000000000000/rotate", {
+      method: "POST",
+      headers: { Cookie: admin.cookie },
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("mints a new key with the same name + userId, echoes rotatedFromId", async () => {
+    const admin = await createUser("Admin", "admin@test.com");
+    const bob = await createUser("Bob", "bob@test.com");
+    const createRes = await req("/api/admin/api-keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie },
+      body: JSON.stringify({ name: "grocery-bot-prod", userId: bob.userId }),
+    });
+    const original = (await createRes.json()) as CreateApiKeyResponse;
+
+    const rotateRes = await req(`/api/admin/api-keys/${original.id}/rotate`, {
+      method: "POST",
+      headers: { Cookie: admin.cookie },
+    });
+    expect(rotateRes.status).toBe(200);
+    const rotated = (await rotateRes.json()) as CreateApiKeyResponse & {
+      rotatedFromId: string;
+    };
+    expect(rotated.id).not.toBe(original.id);
+    expect(rotated.name).toBe("grocery-bot-prod");
+    expect(rotated.userId).toBe(bob.userId);
+    expect(rotated.key).toBeTruthy();
+    expect(rotated.key).not.toBe(original.key);
+    expect(rotated.rotatedFromId).toBe(original.id);
+  });
+
+  it("does NOT delete the old key — both old and new authenticate during the grace window", async () => {
+    const admin = await createUser("Admin", "admin@test.com");
+    const bob = await createUser("Bob", "bob@test.com");
+    const createRes = await req("/api/admin/api-keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie },
+      body: JSON.stringify({ name: "grace-period", userId: bob.userId }),
+    });
+    const original = (await createRes.json()) as CreateApiKeyResponse;
+
+    const rotateRes = await req(`/api/admin/api-keys/${original.id}/rotate`, {
+      method: "POST",
+      headers: { Cookie: admin.cookie },
+    });
+    const rotated = (await rotateRes.json()) as CreateApiKeyResponse;
+
+    // Old key still works
+    const oldRes = await req("/api/users", { headers: { "x-api-key": original.key } });
+    expect(oldRes.status).toBe(200);
+    // New key works
+    const newRes = await req("/api/users", { headers: { "x-api-key": rotated.key } });
+    expect(newRes.status).toBe(200);
+
+    // Admin manually revokes the old one
+    const delRes = await req(`/api/admin/api-keys/${original.id}`, {
+      method: "DELETE",
+      headers: { Cookie: admin.cookie },
+    });
+    expect(delRes.status).toBe(200);
+
+    // Old key no longer works
+    const oldAfter = await req("/api/users", { headers: { "x-api-key": original.key } });
+    expect(oldAfter.status).toBe(401);
+    // New key still works
+    const newAfter = await req("/api/users", { headers: { "x-api-key": rotated.key } });
+    expect(newAfter.status).toBe(200);
   });
 });

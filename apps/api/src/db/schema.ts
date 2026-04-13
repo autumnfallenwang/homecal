@@ -22,6 +22,11 @@ export const users = pgTable("users", {
   banned: boolean().default(false),
   banReason: text(),
   banExpires: timestamp({ withTimezone: true }),
+  // Phase 17: distinguishes "service accounts" (other apps calling HomeCal
+  // via API key) from real family members. Service accounts never appear in
+  // /api/users (the calendar member filter) and have a different UI surface
+  // under /admin?tab=services.
+  isService: boolean().notNull().default(false),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });

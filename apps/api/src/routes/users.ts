@@ -1,4 +1,4 @@
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import type { auth } from "../auth.js";
 import { db } from "../db/index.js";
@@ -14,7 +14,9 @@ export const usersApp = new Hono<{
 
 usersApp.use(requireAuth);
 
-// GET / — List all users (id, name, color only)
+// GET / — List family members for the calendar (id, name, color).
+// Phase 17: explicitly excludes service accounts so the calendar member
+// filter never shows machine users.
 usersApp.get("/", async (c) => {
   const result = await db
     .select({
@@ -23,6 +25,7 @@ usersApp.get("/", async (c) => {
       color: users.color,
     })
     .from(users)
+    .where(eq(users.isService, false))
     .orderBy(asc(users.name));
 
   return c.json(result);

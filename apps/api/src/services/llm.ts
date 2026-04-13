@@ -77,6 +77,7 @@ export function parseLlmResponse(
   try {
     parsed = JSON.parse(cleaned);
   } catch (cause) {
+    // biome-ignore lint/nursery/useErrorCause: cause IS being passed via options; nursery rule false-positive
     throw new Error("Invalid JSON in LLM response", { cause });
   }
 

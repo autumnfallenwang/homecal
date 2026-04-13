@@ -18,6 +18,10 @@ export const auth = betterAuth({
   user: {
     additionalFields: {
       color: { type: "string", required: true },
+      // Phase 17: marks a user record as a "service account" (machine caller
+      // with API keys, not a family member). Set via the admin
+      // /api/admin/service-accounts route; calendar /api/users filters on this.
+      isService: { type: "boolean", required: false, defaultValue: false },
     },
   },
   session: {

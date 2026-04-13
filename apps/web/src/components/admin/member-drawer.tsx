@@ -274,10 +274,7 @@ export function MemberDrawer({ member, onClose, onSaved }: MemberDrawerProps) {
             {initial(name || title)}
           </div>
           <div className="min-w-0 flex-1">
-            <SheetTitle className="truncate">
-              {title || "New member"}
-              <span className="font-display italic text-accent">,</span>
-            </SheetTitle>
+            <SheetTitle className="truncate">{title || "New member"}</SheetTitle>
             <SheetDescription>
               {isNew
                 ? "Pick a name, color, and role. A temp password will be generated."

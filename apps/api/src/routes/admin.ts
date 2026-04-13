@@ -1,5 +1,6 @@
-import { createApiKeyInputSchema } from "@homecal/shared";
-import { and, desc, eq } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
+import { createApiKeyInputSchema, createServiceAccountSchema } from "@homecal/shared";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { auth } from "../auth.js";
 import { db } from "../db/index.js";
@@ -180,6 +181,7 @@ adminApp.get("/api-keys", async (c) => {
       prefix: apikeys.prefix,
       userId: apikeys.userId,
       enabled: apikeys.enabled,
+      requestCount: apikeys.requestCount,
       createdAt: apikeys.createdAt,
       expiresAt: apikeys.expiresAt,
       lastRequest: apikeys.lastRequest,
@@ -202,4 +204,156 @@ adminApp.delete("/api-keys/:id", async (c) => {
 
   await db.delete(apikeys).where(eq(apikeys.id, id));
   return c.json({ ok: true });
+});
+
+// POST /api/admin/api-keys/:id/rotate — mint a fresh key for the same user
+// + name. Does NOT delete the old key — the admin is expected to migrate the
+// calling app first, then revoke the old key explicitly. This grace-period
+// behavior keeps rotation predictable without scheduled-deletion complexity.
+adminApp.post("/api-keys/:id/rotate", async (c) => {
+  const id = c.req.param("id");
+
+  const existing = await db.query.apikeys.findFirst({ where: eq(apikeys.id, id) });
+  if (!existing) {
+    return c.json({ error: "API key not found" }, 404);
+  }
+
+  // Preserve the original key's lifespan — rotation starts a new clock with
+  // the same total duration. Never-expiring keys rotate into never-expiring.
+  let expiresIn: number | undefined;
+  if (existing.expiresAt && existing.createdAt) {
+    const lifespanMs = existing.expiresAt.getTime() - existing.createdAt.getTime();
+    if (lifespanMs > 0) expiresIn = Math.floor(lifespanMs / 1000);
+  }
+
+  try {
+    const created = await auth.api.createApiKey({
+      body: {
+        name: existing.name ?? "rotated",
+        userId: existing.userId,
+        expiresIn,
+      },
+    });
+    return c.json({
+      id: created.id,
+      name: created.name,
+      key: created.key,
+      start: created.start,
+      prefix: created.prefix,
+      userId: created.userId,
+      expiresAt: created.expiresAt,
+      createdAt: created.createdAt,
+      // Echo the predecessor so the UI can highlight which key was rotated.
+      rotatedFromId: existing.id,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to rotate API key";
+    return c.json({ error: message }, 500);
+  }
+});
+
+// ─── Service accounts (Phase 17 task 74) ──────────────────────────────────
+// Admin-only one-shot route that creates a "machine" user record (isService
+// = true) with a throwaway random password. The actual credential is the
+// API key minted under it via /api/admin/api-keys; the password is never
+// returned and never used after creation.
+
+// GET /api/admin/service-accounts — list service accounts with their API keys
+adminApp.get("/service-accounts", async (c) => {
+  const svcUsers = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      role: users.role,
+      banned: users.banned,
+      color: users.color,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .where(eq(users.isService, true))
+    .orderBy(asc(users.name));
+
+  if (svcUsers.length === 0) {
+    return c.json([]);
+  }
+
+  const keys = await db
+    .select({
+      id: apikeys.id,
+      name: apikeys.name,
+      prefix: apikeys.prefix,
+      start: apikeys.start,
+      userId: apikeys.userId,
+      enabled: apikeys.enabled,
+      requestCount: apikeys.requestCount,
+      lastRequest: apikeys.lastRequest,
+      createdAt: apikeys.createdAt,
+      expiresAt: apikeys.expiresAt,
+    })
+    .from(apikeys)
+    .where(
+      inArray(
+        apikeys.userId,
+        svcUsers.map((u) => u.id),
+      ),
+    )
+    .orderBy(desc(apikeys.createdAt));
+
+  const byUser = new Map<string, typeof keys>();
+  for (const k of keys) {
+    const list = byUser.get(k.userId) ?? [];
+    list.push(k);
+    byUser.set(k.userId, list);
+  }
+
+  return c.json(svcUsers.map((user) => ({ user, keys: byUser.get(user.id) ?? [] })));
+});
+
+// POST /api/admin/service-accounts — create a service account
+adminApp.post("/service-accounts", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = createServiceAccountSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.issues }, 400);
+  }
+
+  const { name, role, color } = parsed.data;
+  // Synthetic email so the service account never collides with real family
+  // member addresses. The .homecal.local TLD is reserved for internal use.
+  const slug =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "service";
+  const email = `${slug}-${randomBytes(4).toString("hex")}@service.homecal.local`;
+  // 32 bytes of crypto-random as the throwaway password — never returned.
+  const password = randomBytes(32).toString("hex");
+
+  try {
+    const created = await auth.api.createUser({
+      body: {
+        name,
+        email,
+        password,
+        role,
+        data: { color: color ?? "#6b7280", isService: true },
+      },
+    });
+    const user = created.user as typeof created.user & {
+      color?: string;
+      isService?: boolean;
+    };
+    return c.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role ?? role,
+      color: user.color ?? color ?? "#6b7280",
+      isService: true,
+      createdAt: user.createdAt,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to create service account";
+    return c.json({ error: message }, 500);
+  }
 });

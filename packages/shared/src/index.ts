@@ -82,6 +82,17 @@ export const createApiKeyInputSchema = z.object({
   expiresInDays: z.number().int().positive().max(3650).optional(),
 });
 
+// Service accounts (Phase 17 task 74) — admin-managed machine identities
+// that own API keys. Password is generated server-side and never returned.
+export const createServiceAccountSchema = z.object({
+  name: z.string().min(1).max(64),
+  role: z.enum(["user", "admin"]).optional().default("user"),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Color must be a 6-char hex code like #c2410c")
+    .optional(),
+});
+
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type EventQuery = z.infer<typeof eventQuerySchema>;
@@ -93,3 +104,4 @@ export type ParsedEvent = z.infer<typeof parsedEventSchema>;
 export type CreateReminderInput = z.infer<typeof createReminderSchema>;
 export type RegisterDeviceInput = z.infer<typeof registerDeviceSchema>;
 export type CreateApiKeyInput = z.infer<typeof createApiKeyInputSchema>;
+export type CreateServiceAccountInput = z.infer<typeof createServiceAccountSchema>;
