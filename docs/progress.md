@@ -107,13 +107,72 @@
 | 47 | Import web UI | ✅ Done | "Import .ics file" button in Quick Add popover, file picker, calls POST /api/events/import, shows imported/skipped count, auto-closes popover, refetches calendar |
 | 48 | Export API + web UI | ✅ Done | `GET /api/events/export.ics` (all events) + `GET /api/events/:id/export.ics` (single event). Download button (↓) in header, Export button in EventDialog next to Delete. 9 unit tests. |
 
-## Phase 13: Future Enhancements (deferred)
+## Phase 13: Web Design Refresh — Warm Editorial
+
+Visual redesign of `apps/web` to the Warm Editorial aesthetic (Fraunces + Inter Tight, warm paper/ink palette, terracotta accent). Direction locked via [design-refresh-proposal.md](design-refresh-proposal.md). Visual only — no data model, API, or routing changes. Ships in three browser-verifiable sub-phases.
+
+### Phase 13a — Foundation: tokens, fonts, header, month grid
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 49 | Typography + color tokens | ✅ Done | `next/font/google` loads Fraunces (opsz + SOFT axes) + Inter Tight as `--font-display` / `--font-sans` on `<html>`. Rewrote `globals.css` with Warm Editorial OKLch palette (paper, ink, terracotta accent) for light + dark, preserved all shadcn token names so existing components keep working. Added `--paper-warm`, `--rule`, `--accent-soft`, `--ink-faint`, `--shadow-card` custom tokens. `tnum`/`ss01` font features + inline SVG grain overlay on body. Focus ring now accent terracotta. Next.js build + browser verify on `/login` clean |
+| 50 | Header restructure | ✅ Done | New shadcn `ui/dropdown-menu.tsx` primitive wrapping `radix-ui` DropdownMenu (styled with Warm Editorial tokens + `shadow-card`). Rewrote `calendar-header.tsx` into two rows: brand row (Fraunces `homecal.` wordmark + avatar button → dropdown) and toolbar row (Fraunces title with terracotta italic comma + year tail, segmented view toggle, prev/Today/next, quick-add trigger). Title crossfade via `key={title}` + `animate-in fade-in-0 slide-in-from-left-2`. Avatar dropdown groups: identity (name/email) → Appearance submenu (Light/Dark radio) + Account settings → Export + Import (hidden file input with onIcsImport handler) → Admin (conditional) → Sign out (destructive variant). Added `onToday` prop + handler in `page.tsx` (sets month/week/day anchor to now). Appearance Light/Dark only (no System — matches existing theme provider). Theme section removed from settings modal (moved to dropdown). `Today` segment deferred to task 60 so toggle stays 3 segments for now. Browser-verified dropdown + groups render correctly at 1440px |
+| 51 | Month grid polish | ✅ Done | `month-grid.tsx`: full-name Fraunces italic day-of-week headers (`Monday`/`Tuesday`/...), Sat+Sun in terracotta accent, responsive short labels on `<md`. `day-cell.tsx`: responsive heights `min-h-28 md:min-h-32 xl:min-h-40`, `bg-paper-warm` weekend tint, 50% opacity out-of-month, Fraunces date numerals `text-2xl md:text-3xl` top-left, today gets 3px terracotta `before` accent bar + italic accent numeral (no bg fill), 18ms staggered fade-in per cell (capped 760ms) via `motion-safe:animate-in` + inline `animationDelay`, `border-rule` hairlines. "+N more" text restyled to Fraunces italic. Browser-verified at 1440px |
+| 52 | Event pill redesign | ✅ Done | `event-pill.tsx` rewritten: `color-mix(in oklab, ${color} 14%, var(--background))` tint fill + 2px solid left border in member color, foreground text (not washed-out color), small 3px radius, tabular `10px` muted time prefix, dotted-underline for series (replaces `↻`), 🔒 prefix for private, all-day variant is `rounded-r-full` + italic Fraunces + right-edge bleed. Hover: `translate-x-px` + 1px `ring-foreground/25`. `day-cell.tsx` computes `isAllDay` (midnight-to-midnight ≥1 day) + formats compressed time label (`7a`/`12p`/`6:30p`) and passes through. Multi-day `span-start/mid/end` deferred (needs cross-cell layout). Browser-verified at 1440px |
+
+### Phase 13b — Week/Day views, quick-add, member filter
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 53 | Week/Day grid polish | Not started | Fraunces italic time gutter (compressed `6` not `6:00`), terracotta current-time line + gutter dot (pulse w/ `prefers-reduced-motion` guard), 1px inner shadow on overlapped blocks, scroll-to-now on "today" |
+| 54 | Member filter redesign | Not started | `member-filter.tsx`: collapse to horizontal chip row on `<lg`, Fraunces avatar initials in member-colored circles, filled vs 1px outline states, "Only me" / "Everyone" quick toggles |
+| 55 | Quick Add popover redesign | Not started | `quick-add-popover.tsx`: single large Fraunces-placeholder input, 4 circular icon buttons (type/voice/image/ics), animated 3-bar equalizer during voice capture, skeleton preview of parsed event card before dialog opens |
+
+### Phase 13c — Event dialog, states, a11y
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 56 | Event dialog redesign | Not started | `event-dialog.tsx`: two-column md+ layout (title/time/location/assignees \| notes/reminders/recurrence/privacy), Fraunces 24px title input, avatar chip assignees, segmented reminder presets, sticky mobile save. Keep change-log tab |
+| 57 | Loading / empty / overflow states | Not started | 42-cell shimmering grid skeleton, hover `+` affordance on empty days, inline SVG illustration + CTA on empty calendar, terracotta "+N" chip opens `EventDetailPopover` listing hidden events (no dialog hop). **Shared component**: `EventDetailPopover` is the single source of truth for event detail rows, reused by Today-view tap (task 61) |
+| 58 | Accessibility + motion polish | Not started | Terracotta focus rings, `prefers-reduced-motion` guards on all stagger/pulse animations, tabular-numeral audit, 4.5:1 contrast verification across pill variants in light + dark, full browser pass month/week/day/quick-add/dialog/admin |
+| 58a | Auth screens refresh | Not started | Rewrite `/login` + `/register` — warm paper + grain background, two-column on `lg+` (Fraunces hero left + form `Card` right), `Welcome home` / `Make yourself at home` italic heroes w/ inline SVG, Fraunces 18px labels, terracotta inline error states, Fraunces italic link pair at bottom, Better Auth errors via sonner toast |
+| 58b | Settings modal polish + global shells | Not started | Shrink settings modal (3 sections: identity / color / password — theme toggle moved to avatar dropdown), md+ two-column layout. Add `app/loading.tsx` (global skeleton), `app/error.tsx` (Fraunces "Something tripped on the rug." + retry), `app/not-found.tsx` (Fraunces "Lost in the calendar." + compass SVG). Verify sonner picks up tokens; add `<Toaster />` override in `layout.tsx` if needed |
+| 58c | Change log + misc component audit | Not started | `ChangeLog`: Fraunces italic timestamps, Inter Tight 12px uppercase diff labels, 18px avatar chip for author. Destructive `AlertDialog` contrast check (delete event, remove from family) — may need slightly darker destructive token in light. Audit shared inputs (reminder presets, private switch, location, date-time). Cross-screen walkthrough: month → week → day → today → quick-add → event dialog → settings → login → register → family → 404 → error boundary |
+
+## Phase 14: "Today" View (Morning Paper)
+
+New glance-first surface distinct from the editing Day view. Becomes the default landing view (`Today | Day | Week | Month`). Editorial two-column spread: Fraunces date hero, timeline left with current-time line + NOW pill, glance rail right with Next-up callout + member chips (default **Just me**, session-only). Full spec in [design-refresh-proposal.md §7](design-refresh-proposal.md). Depends on Phase 13a tokens being in place.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 59 | Today endpoint | Not started | `GET /api/events/today?tz=&userIds=` → `{ serverNow, today, tomorrow: { count, firstTitle, hasMultiDayStart } }`. IANA tz validation, reuses visibility filter, shared Zod schema. Unit tests for DST/tz edges + integration tests for userIds filter |
+| 60 | Today route + layout | Not started | Add `today` to view union + 4th segment in `calendar-header.tsx` (first position), default to Today on first load, migrate localStorage. New `today-view.tsx`: Morning Paper 2-col grid (`lg:grid-cols-[3fr_2fr]`), Fraunces date hero `clamp(72px,11vw,144px)`, fetches `/api/events/today` on mount + filter change |
+| 61 | Timeline component | Not started | `today-timeline.tsx`: Fraunces italic hour gutter (event-range only), event cards w/ avatar chips + tabular time, past=50% opacity, current=terracotta border + pulsing NOW pill, 1px current-time line, tap → read-only `EventDetailPopover` with Edit button → existing `EventDialog`. "Earlier today (N)" collapsed row for events >2h past |
+| 62 | Glance rail | Not started | `today-glance.tsx`: "Next up" callout (Intl.RelativeTimeFormat), event count chip, member avatar chips (reuse task 54 component) w/ Only me / Everyone toggles — session-only state resets to self each visit, Tomorrow teaser row → jumps to Day view. Reserved empty section at bottom for future widgets |
+| 63 | Empty state + polish | Not started | *"Nothing on the books"* Fraunces empty state + inline SVG sun, sticky compressed hero on scroll, aria-live NOW/relative-time updates, full browser verification at 1440/1024/768/390px, tz correctness check |
+
+## Phase 15: Family Page (Admin Refresh)
+
+Reframe `/admin` as **Family** — warm portrait grid of member cards + Radix `Sheet` detail drawer. Route stays `/admin`, still admin-gated. Drops the user table + search; adds sessions list and temp-password generator. Full spec in [design-plan.md Phase 15](design-plan.md). Depends on Phase 13a tokens.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 64 | Sessions API | Not started | `GET /api/admin/users/:id/sessions` + `DELETE .../:sessionId` + `DELETE .../sessions` (revoke all), delegates to Better Auth admin plugin, admin-only middleware, shared Zod schemas, unit + integration tests |
+| 65 | Temp password generator | Not started | `POST /api/admin/users/:id/reset-password` → returns `{ password }`, 14 chars crypto-random readable alphabet (no 0/O/1/l/I), hashed via Better Auth, plaintext never logged, integration test verifies auth |
+| 66 | Family page redesign | Not started | Rewrite `app/admin/page.tsx` — Fraunces "Family" hero, portrait grid (`lg:4 md:3 2 cols`), `FamilyCard` component (64px initial in colored circle, Fraunces name, status row, stats), current user pinned + "you" tag, banned = desaturated + "paused" ribbon, `InviteCard` ghost at end, card click → drawer. Remove table + search |
+| 67 | Member detail drawer | Not started | `member-drawer.tsx` using Radix `Sheet` (right desktop, bottom sheet mobile). Sections: portrait header w/ inline name/color edit, password reset + clipboard toast, sessions list w/ per-row revoke + "sign out everywhere", role & status toggles w/ reason, danger zone "Remove from family" (types name to confirm). Also handles new-member mode |
+| 68 | Empty, loading, mobile polish | Not started | Grid skeleton (4 shimmer cards), mobile single-column + 85vh bottom sheet, `Esc` closes drawer, `/` focuses jump input, role-gated access test, browser verification 1440/1024/768/390px |
+
+## Phase 16: Future Enhancements (deferred)
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
 | — | iOS push via APNs | Not started | Enable when Apple Developer account is available |
 | — | Web Push notifications | Not started | Service Worker + Web Push API (add if users want desktop alerts) |
 | — | iOS voice input | Not started | Speech framework mic button → parse endpoint (requires physical device) |
+| — | Today view ambient widgets | Not started | Weather, chores/waiting-on, shopping list — fill the reserved glance-rail slot |
+| — | iOS Today view | Not started | Port Morning Paper layout to SwiftUI |
+| — | iOS Family page | Not started | Port portrait grid + drawer layout to SwiftUI |
 
 ## What's Working
 
@@ -149,7 +208,7 @@
 
 ## What's Next
 
-Phase 12 (iCalendar Import/Export) complete. All tasks 46-48 done.
+**Phase 13a complete** — tasks 49 (tokens), 50 (header), 51 (month grid), 52 (event pills) all done. Next: pick a direction — 13b (week/day/quick-add/member filter), 13c (dialog/states/a11y), Phase 14 (Today view), or Phase 15 (Family page). Phase 13a is the token + foundation; everything downstream inherits it.
 
 ## Reference Docs
 

@@ -1,8 +1,18 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Download, LogOut, Settings, ShieldCheck } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  LogOut,
+  Settings,
+  ShieldCheck,
+  Sun,
+  Upload,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +23,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
@@ -27,6 +50,7 @@ interface CalendarHeaderProps {
   userRole?: string;
   onPrev: () => void;
   onNext: () => void;
+  onToday?: () => void;
   onViewChange: (view: "month" | "week" | "day") => void;
   onNewEvent?: () => void;
   onSmartInput?: (text: string) => Promise<boolean>;
@@ -35,6 +59,12 @@ interface CalendarHeaderProps {
   onProfileSaved?: () => void;
   smartInputLoading?: boolean;
   imageInputLoading?: boolean;
+}
+
+function splitTitle(title: string): { head: string; tail: string | null } {
+  const idx = title.lastIndexOf(" ");
+  if (idx <= 0) return { head: title, tail: null };
+  return { head: title.slice(0, idx), tail: title.slice(idx + 1) };
 }
 
 export function CalendarHeader({
@@ -46,6 +76,7 @@ export function CalendarHeader({
   userRole,
   onPrev,
   onNext,
+  onToday,
   onViewChange,
   onNewEvent,
   onSmartInput,
@@ -57,6 +88,7 @@ export function CalendarHeader({
 }: CalendarHeaderProps) {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+  const icsInputRef = useRef<HTMLInputElement>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileEmail, setProfileEmail] = useState(userEmail ?? "");
   const [profileColor, setProfileColor] = useState(userColor ?? "#3b82f6");
@@ -64,21 +96,15 @@ export function CalendarHeader({
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
-  const [profileTheme, setProfileTheme] = useState(theme);
+  const { head, tail } = splitTitle(title);
+  const initial = userName.trim().charAt(0).toUpperCase() || "·";
 
   function openProfile() {
     setProfileEmail(userEmail ?? "");
     setProfileColor(userColor ?? "#3b82f6");
     setProfilePassword("");
-    setProfileTheme(theme);
     setProfileError(null);
     setProfileOpen(true);
-  }
-
-  function handleProfileClose() {
-    // Revert theme preview if not saved
-    document.documentElement.classList.toggle("dark", theme === "dark");
-    setProfileOpen(false);
   }
 
   async function handleProfileSubmit(e: FormEvent) {
@@ -99,11 +125,8 @@ export function CalendarHeader({
           revokeOtherSessions: false,
         });
       }
-      // Persist theme
-      setTheme(profileTheme);
       setProfileOpen(false);
       onProfileSaved?.();
-      // Reload page to reflect session changes (name, color, email)
       if (profileColor !== userColor || profileEmail !== userEmail || profilePassword) {
         window.location.reload();
       }
@@ -119,101 +142,202 @@ export function CalendarHeader({
     router.push("/login");
   };
 
+  const handleExport = () => {
+    window.location.href = "/api/events/export.ics";
+  };
+
+  const handleImportClick = () => {
+    icsInputRef.current?.click();
+  };
+
+  const handleIcsFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !onIcsImport) return;
+    const text = await file.text();
+    await onIcsImport(text);
+    if (icsInputRef.current) icsInputRef.current.value = "";
+  };
+
+  const segButton = (value: "month" | "week" | "day", label: string) => (
+    <button
+      type="button"
+      onClick={() => onViewChange(value)}
+      className={`rounded-full px-4 py-1.5 text-xs font-medium tracking-wide transition-colors ${
+        view === value
+          ? "bg-foreground text-background shadow-sm"
+          : "text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
   return (
-    <header className="flex items-center justify-between border-b px-4 py-2">
-      {/* Left: logo + view toggle + nav */}
-      <div className="flex items-center gap-4">
-        <h1 className="text-lg font-bold">HomeCal</h1>
+    <header className="border-b">
+      {/* ─── Brand row ─────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-6 pt-5 pb-3">
+        <span className="font-display text-2xl italic tracking-tight">
+          home<span className="not-italic font-medium">cal</span>
+          <span className="text-accent">.</span>
+        </span>
 
-        <div className="flex items-center rounded-md border">
-          <Button
-            variant={view === "month" ? "secondary" : "ghost"}
-            size="sm"
-            className="rounded-r-none"
-            onClick={() => onViewChange("month")}
-          >
-            Month
-          </Button>
-          <Button
-            variant={view === "week" ? "secondary" : "ghost"}
-            size="sm"
-            className="rounded-none border-x"
-            onClick={() => onViewChange("week")}
-          >
-            Week
-          </Button>
-          <Button
-            variant={view === "day" ? "secondary" : "ghost"}
-            size="sm"
-            className="rounded-l-none"
-            onClick={() => onViewChange("day")}
-          >
-            Day
-          </Button>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-2.5 rounded-full p-1 pr-3 transition-colors hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              aria-label="Account menu"
+            >
+              <span
+                className="flex h-9 w-9 items-center justify-center rounded-full font-display text-base text-white"
+                style={{ backgroundColor: userColor ?? "oklch(0.58 0.16 45)" }}
+              >
+                {initial}
+              </span>
+              <span className="hidden text-sm font-medium sm:inline">{userName}</span>
+              <ChevronDown className="hidden h-4 w-4 text-muted-foreground sm:inline" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel className="pb-2">
+              <div className="font-display text-base leading-tight">{userName}</div>
+              {userEmail && <div className="mt-0.5 text-xs text-muted-foreground">{userEmail}</div>}
+            </DropdownMenuLabel>
 
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon-sm" onClick={onPrev}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="min-w-36 text-center text-sm font-medium">{title}</span>
-          <Button variant="ghost" size="icon-sm" onClick={onNext}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+            <DropdownMenuSeparator />
+
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Sun className="h-4 w-4" />
+                <span>Appearance</span>
+                <span className="ml-auto text-xs text-muted-foreground capitalize">{theme}</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuRadioGroup
+                  value={theme}
+                  onValueChange={(v) => setTheme(v as "light" | "dark")}
+                >
+                  <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuItem onClick={openProfile}>
+              <Settings className="h-4 w-4" />
+              Account settings
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem onClick={handleExport}>
+              <Download className="h-4 w-4" />
+              Export calendar
+            </DropdownMenuItem>
+            {onIcsImport && (
+              <DropdownMenuItem onClick={handleImportClick}>
+                <Upload className="h-4 w-4" />
+                Import .ics
+              </DropdownMenuItem>
+            )}
+
+            {userRole === "admin" && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => router.push("/admin")}>
+                  <ShieldCheck className="h-4 w-4" />
+                  Admin
+                </DropdownMenuItem>
+              </>
+            )}
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem variant="destructive" onClick={handleSignOut}>
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      {/* Right: quick add + user + sign out */}
-      <div className="flex items-center gap-2">
-        {onSmartInput && onImageInput && onIcsImport && onNewEvent && (
-          <QuickAddPopover
-            onSmartInput={onSmartInput}
-            onImageInput={onImageInput}
-            onIcsImport={onIcsImport}
-            smartInputLoading={smartInputLoading}
-            imageInputLoading={imageInputLoading}
-            onNewEvent={onNewEvent}
-          />
-        )}
-        <span className="text-sm text-muted-foreground">{userName}</span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => {
-            window.location.href = "/api/events/export.ics";
-          }}
-          title="Export .ics"
+      {/* ─── Toolbar row ───────────────────────────────────────── */}
+      <div className="flex flex-wrap items-end justify-between gap-4 px-6 pb-5 md:flex-nowrap">
+        <h1
+          key={title}
+          className="font-display text-4xl font-light leading-none tracking-tight text-foreground duration-300 animate-in fade-in-0 slide-in-from-left-2 md:text-5xl lg:text-6xl"
         >
-          <Download className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" onClick={openProfile} title="Settings">
-          <Settings className="h-4 w-4" />
-        </Button>
-        {userRole === "admin" && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => router.push("/admin")}
-            title="Admin"
-          >
-            <ShieldCheck className="h-4 w-4" />
-          </Button>
-        )}
-        <Button variant="ghost" size="icon-sm" onClick={handleSignOut} title="Sign out">
-          <LogOut className="h-4 w-4" />
-        </Button>
+          {head}
+          <span className="font-light not-italic text-accent">,</span>
+          {tail && (
+            <span className="ml-3 font-display text-lg italic text-muted-foreground">{tail}</span>
+          )}
+        </h1>
+
+        <div className="flex items-center gap-2">
+          <div className="inline-flex items-center gap-0.5 rounded-full border bg-background p-0.5">
+            {segButton("day", "Day")}
+            {segButton("week", "Week")}
+            {segButton("month", "Month")}
+          </div>
+
+          <div className="inline-flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onPrev}
+              className="rounded-full"
+              aria-label="Previous"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            {onToday && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onToday}
+                className="font-display italic text-sm rounded-full px-4"
+              >
+                Today
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onNext}
+              className="rounded-full"
+              aria-label="Next"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {onSmartInput && onImageInput && onIcsImport && onNewEvent && (
+            <QuickAddPopover
+              onSmartInput={onSmartInput}
+              onImageInput={onImageInput}
+              onIcsImport={onIcsImport}
+              smartInputLoading={smartInputLoading}
+              imageInputLoading={imageInputLoading}
+              onNewEvent={onNewEvent}
+            />
+          )}
+        </div>
       </div>
 
-      {/* Profile Modal */}
-      <Dialog
-        open={profileOpen}
-        onOpenChange={(open) => {
-          if (!open) handleProfileClose();
-        }}
-      >
+      {/* Hidden file input for dropdown Import action */}
+      <input
+        ref={icsInputRef}
+        type="file"
+        accept=".ics,text/calendar"
+        className="hidden"
+        onChange={handleIcsFileChange}
+      />
+
+      {/* Settings Modal (theme moved to dropdown; email/color/password only) */}
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Settings</DialogTitle>
+            <DialogTitle className="font-display text-2xl">Account settings</DialogTitle>
             <DialogDescription>Update your email, color, or password.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleProfileSubmit} className="flex flex-col gap-4">
@@ -251,38 +375,9 @@ export function CalendarHeader({
                 minLength={8}
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Theme</Label>
-              <div className="flex items-center rounded-md border w-fit">
-                <Button
-                  type="button"
-                  variant={profileTheme === "light" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="rounded-r-none"
-                  onClick={() => {
-                    setProfileTheme("light");
-                    document.documentElement.classList.remove("dark");
-                  }}
-                >
-                  Light
-                </Button>
-                <Button
-                  type="button"
-                  variant={profileTheme === "dark" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="rounded-l-none"
-                  onClick={() => {
-                    setProfileTheme("dark");
-                    document.documentElement.classList.add("dark");
-                  }}
-                >
-                  Dark
-                </Button>
-              </div>
-            </div>
             {profileError && <p className="text-sm text-destructive">{profileError}</p>}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleProfileClose}>
+              <Button type="button" variant="outline" onClick={() => setProfileOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={profileSaving}>

@@ -4,7 +4,15 @@ import type { CalendarEvent } from "@/hooks/use-events";
 import * as calUtils from "@/lib/calendar-utils";
 import { DayCell } from "./day-cell";
 
-const DAY_HEADERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_HEADERS = [
+  { full: "Monday", short: "Mon", weekend: false },
+  { full: "Tuesday", short: "Tue", weekend: false },
+  { full: "Wednesday", short: "Wed", weekend: false },
+  { full: "Thursday", short: "Thu", weekend: false },
+  { full: "Friday", short: "Fri", weekend: false },
+  { full: "Saturday", short: "Sat", weekend: true },
+  { full: "Sunday", short: "Sun", weekend: true },
+];
 
 interface MonthGridProps {
   year: number;
@@ -37,23 +45,27 @@ export function MonthGrid({ year, month, events, onEventClick, onDayClick }: Mon
   return (
     <div className="flex flex-1 flex-col">
       {/* Day-of-week header */}
-      <div className="grid grid-cols-7 border-b">
+      <div className="grid grid-cols-7 border-b border-rule px-1">
         {DAY_HEADERS.map((day) => (
           <div
-            key={day}
-            className="border-r px-2 py-1 text-center text-xs font-medium text-muted-foreground"
+            key={day.full}
+            className={`px-4 py-3 font-display text-sm italic tracking-wide md:text-base ${
+              day.weekend ? "text-accent/80" : "text-muted-foreground"
+            }`}
           >
-            {day}
+            <span className="hidden md:inline">{day.full}</span>
+            <span className="md:hidden">{day.short}</span>
           </div>
         ))}
       </div>
 
       {/* 6x7 grid */}
       <div className="grid flex-1 grid-cols-7 grid-rows-6">
-        {gridDates.map((date) => (
+        {gridDates.map((date, index) => (
           <DayCell
             key={date.toISOString()}
             date={date}
+            index={index}
             events={eventsByDay.get(dateKey(date)) ?? []}
             isCurrentMonth={calUtils.isSameMonth(date, year, month)}
             isToday={calUtils.isToday(date)}

@@ -110,6 +110,17 @@ export default function HomePage() {
   const handlePrev = navHandlers[view].prev;
   const handleNext = navHandlers[view].next;
 
+  const handleToday = useCallback(() => {
+    const now = new Date();
+    if (view === "month") {
+      setYearMonth({ year: now.getFullYear(), month: now.getMonth() });
+    } else if (view === "week") {
+      setWeekAnchor(now);
+    } else {
+      setDayAnchor(now);
+    }
+  }, [view]);
+
   const headerTitles = {
     month: formatMonthYear(year, month),
     week: formatWeekRange(weekDates),
@@ -262,6 +273,7 @@ export default function HomePage() {
         userRole={session.user.role ?? undefined}
         onPrev={handlePrev}
         onNext={handleNext}
+        onToday={handleToday}
         onViewChange={handleViewChange}
         onNewEvent={handleNewEvent}
         onSmartInput={handleSmartInput}
