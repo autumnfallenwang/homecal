@@ -27,6 +27,10 @@ export const users = pgTable("users", {
   // /api/users (the calendar member filter) and have a different UI surface
   // under /admin?tab=services.
   isService: boolean().notNull().default(false),
+  // Phase 18 task 81: per-user holiday country preference. Null means "not
+  // set yet" — the API derives a default from the request's accept-language
+  // header and returns it transiently; the value is only persisted on PATCH.
+  holidayCountries: text().array(),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });

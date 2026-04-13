@@ -105,3 +105,36 @@ export type CreateReminderInput = z.infer<typeof createReminderSchema>;
 export type RegisterDeviceInput = z.infer<typeof registerDeviceSchema>;
 export type CreateApiKeyInput = z.infer<typeof createApiKeyInputSchema>;
 export type CreateServiceAccountInput = z.infer<typeof createServiceAccountSchema>;
+
+// National holidays (Phase 18 task 80) — read-only, computed on-the-fly
+// from `date-holidays`. Multi-country via comma-separated codes; public
+// holidays only for v1. Dates are local YYYY-MM-DD (no timezone).
+export const holidaysQuerySchema = z.object({
+  countries: z
+    .string()
+    .regex(
+      /^[A-Z]{2}(,[A-Z]{2})*$/,
+      "countries must be comma-separated ISO 3166-1 alpha-2 codes (e.g. US,TW)",
+    ),
+  from: z.iso.date(),
+  to: z.iso.date(),
+});
+export type HolidaysQuery = z.infer<typeof holidaysQuerySchema>;
+
+export interface Holiday {
+  date: string; // YYYY-MM-DD
+  title: string; // human-readable, " · " joined when multi-country
+  countries: string[]; // ISO 3166-1 alpha-2 codes, sorted
+  type: "public";
+}
+
+// Per-user holiday country preference (Phase 18 task 81)
+export const userPreferencesSchema = z.object({
+  holidayCountries: z
+    .array(z.string().regex(/^[A-Z]{2}$/, "Country must be ISO 3166-1 alpha-2"))
+    .max(20)
+    .optional(),
+});
+export type UserPreferences = z.infer<typeof userPreferencesSchema>;
+
+export { acceptLanguageToCountry, localeToCountry } from "./locale.js";

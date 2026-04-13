@@ -8,6 +8,7 @@ import { swaggerUiHtml } from "./openapi/swagger-ui.html.js";
 import { adminApp } from "./routes/admin.js";
 import { devicesApp } from "./routes/devices.js";
 import { eventsApp } from "./routes/events.js";
+import { holidaysApp } from "./routes/holidays.js";
 import { remindersApp } from "./routes/reminders.js";
 import { seriesApp } from "./routes/series.js";
 import { usersApp } from "./routes/users.js";
@@ -84,6 +85,7 @@ for (const prefix of apiPrefixes) {
   app.route(`${prefix}/series`, seriesApp);
   app.route(`${prefix}/devices`, devicesApp);
   app.route(`${prefix}/admin`, adminApp);
+  app.route(`${prefix}/holidays`, holidaysApp);
 }
 
 // Example protected route (used by integration tests)

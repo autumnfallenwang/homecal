@@ -66,19 +66,20 @@ export default function AdminPage() {
         }
         // `/api/users` already filters out service accounts — using its id set
         // here hides them from the Family tab without a separate query.
-        setAllUsers(
-          adminRes.data.users
-            .filter((u) => colorMap.has(u.id))
-            .map((u) => ({
-              id: u.id,
-              name: u.name,
-              email: u.email,
-              role: u.role ?? "user",
-              banned: u.banned ?? false,
-              color: colorMap.get(u.id) ?? "#6b7280",
-              createdAt: u.createdAt.toString(),
-            })),
-        );
+        const familyUsers: FamilyMember[] = [];
+        for (const u of adminRes.data.users) {
+          if (!colorMap.has(u.id)) continue;
+          familyUsers.push({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            role: u.role ?? "user",
+            banned: u.banned ?? false,
+            color: colorMap.get(u.id) ?? "#6b7280",
+            createdAt: u.createdAt.toString(),
+          });
+        }
+        setAllUsers(familyUsers);
       }
     } catch {
       setError("Failed to load users");

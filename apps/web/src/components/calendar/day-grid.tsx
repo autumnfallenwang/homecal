@@ -1,10 +1,13 @@
 "use client";
 
+import type { Holiday } from "@homecal/shared";
 import { type MouseEvent, useEffect, useRef } from "react";
 import type { CalendarEvent } from "@/hooks/use-events";
 import { isToday } from "@/lib/calendar-utils";
+import { holidayKey, indexHolidaysByDate } from "@/lib/holiday-utils";
 import { cn } from "@/lib/utils";
 import { CurrentTimeLine } from "./current-time-line";
+import { HolidayKicker } from "./holiday-kicker";
 import {
   DEFAULT_SCROLL_HOUR,
   formatHourCompact,
@@ -20,13 +23,15 @@ import { WeekEventBlock } from "./week-event-block";
 interface DayGridProps {
   date: Date;
   events: CalendarEvent[];
+  holidays?: Holiday[];
   onEventClick?: (eventId: string) => void;
   onSlotClick?: (date: Date) => void;
 }
 
-export function DayGrid({ date, events, onEventClick, onSlotClick }: DayGridProps) {
+export function DayGrid({ date, events, holidays = [], onEventClick, onSlotClick }: DayGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const today = isToday(date);
+  const holiday = indexHolidaysByDate(holidays).get(holidayKey(date));
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally runs on mount only
   useEffect(() => {
@@ -78,6 +83,7 @@ export function DayGrid({ date, events, onEventClick, onSlotClick }: DayGridProp
           >
             {date.getDate()}
           </span>
+          {holiday && <HolidayKicker holiday={holiday} variant="header" className="mt-0.5" />}
         </div>
       </div>
 

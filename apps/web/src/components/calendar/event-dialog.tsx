@@ -562,7 +562,6 @@ export function EventDialog({
           <DialogHeader>
             <DialogTitle className="font-display text-2xl font-light tracking-tight">
               {isEditingSeries ? "Update series" : "Create series"}
-              <span className="font-display italic text-accent">,</span>
               <span className="ml-2 font-display text-lg italic text-muted-foreground">
                 preview
               </span>
@@ -634,7 +633,6 @@ export function EventDialog({
         <DialogHeader>
           <DialogTitle className="font-display text-2xl font-light tracking-tight">
             {headerLabel}
-            <span className="font-display italic text-accent">,</span>
           </DialogTitle>
           <DialogDescription>
             {isSeriesEdit && "Update the series settings and regenerate all events."}

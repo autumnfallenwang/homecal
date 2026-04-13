@@ -1,10 +1,12 @@
 "use client";
 
+import type { Holiday } from "@homecal/shared";
 import { Plus } from "lucide-react";
 import type { CalendarEvent } from "@/hooks/use-events";
 import { cn } from "@/lib/utils";
 import { EventDetailPopover } from "./event-detail-popover";
 import { EventPill } from "./event-pill";
+import { HolidayKicker } from "./holiday-kicker";
 
 const MAX_VISIBLE_PILLS = 3;
 const STAGGER_MS = 18;
@@ -33,6 +35,7 @@ interface DayCellProps {
   date: Date;
   index: number;
   events: CalendarEvent[];
+  holiday?: Holiday;
   isCurrentMonth: boolean;
   isToday: boolean;
   onEventClick?: (eventId: string) => void;
@@ -43,6 +46,7 @@ export function DayCell({
   date,
   index,
   events,
+  holiday,
   isCurrentMonth,
   isToday: today,
   onEventClick,
@@ -71,6 +75,13 @@ export function DayCell({
       style={{ animationDelay: `${delay}ms` }}
       onClick={() => onDayClick?.(date)}
     >
+      {holiday && (
+        <HolidayKicker
+          holiday={holiday}
+          variant="month"
+          className="pointer-events-none absolute top-2 right-3 left-12"
+        />
+      )}
       <span
         className={cn(
           "font-display text-2xl font-light leading-none tracking-tight md:text-3xl",

@@ -6,13 +6,15 @@ import {
   ChevronRight,
   Download,
   LogOut,
+  Plus,
   Settings,
   ShieldCheck,
   Sun,
   Upload,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, useMemo, useRef, useState } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,7 +40,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useCountries } from "@/hooks/use-countries";
+import { usePreferences } from "@/hooks/use-preferences";
 import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 import { QuickAddPopover } from "./quick-add-popover";
 
 interface CalendarHeaderProps {
@@ -112,6 +118,26 @@ export function CalendarHeader({
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
+  // Phase 18 task 83: holiday country preference in the settings modal.
+  const { prefs, setHolidayCountries } = usePreferences();
+  const { countries: allCountries } = useCountries();
+  const [holidayDraft, setHolidayDraft] = useState<string[]>([]);
+  const [countrySearch, setCountrySearch] = useState("");
+  const [showObservances, setShowObservances] = useState(false);
+  const countryNameByCode = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of allCountries) map.set(c.code, c.name);
+    return map;
+  }, [allCountries]);
+  const filteredCountries = useMemo(() => {
+    const q = countrySearch.trim().toLowerCase();
+    const available = allCountries.filter((c) => !holidayDraft.includes(c.code));
+    if (!q) return available.slice(0, 50);
+    return available
+      .filter((c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q))
+      .slice(0, 50);
+  }, [allCountries, holidayDraft, countrySearch]);
+
   const titleNodes = renderAccentedTitle(title);
   const initial = userName.trim().charAt(0).toUpperCase() || "·";
 
@@ -120,6 +146,8 @@ export function CalendarHeader({
     setProfileColor(userColor ?? "#3b82f6");
     setProfilePassword("");
     setProfileError(null);
+    setHolidayDraft(prefs.holidayCountries);
+    setCountrySearch("");
     setProfileOpen(true);
   }
 
@@ -140,6 +168,12 @@ export function CalendarHeader({
           currentPassword: "",
           revokeOtherSessions: false,
         });
+      }
+      const holidayChanged =
+        holidayDraft.length !== prefs.holidayCountries.length ||
+        holidayDraft.some((c, i) => prefs.holidayCountries[i] !== c);
+      if (holidayChanged) {
+        await setHolidayCountries(holidayDraft);
       }
       setProfileOpen(false);
       onProfileSaved?.();
@@ -357,7 +391,6 @@ export function CalendarHeader({
           <DialogHeader>
             <DialogTitle className="font-display text-2xl font-light tracking-tight">
               Account settings
-              <span className="font-display italic text-accent">,</span>
             </DialogTitle>
             <DialogDescription>Update your email, color, or password.</DialogDescription>
           </DialogHeader>
@@ -425,6 +458,92 @@ export function CalendarHeader({
                 </div>
               </div>
             </div>
+            {/* ─── Holidays ─── */}
+            <div className="flex flex-col gap-2 border-t border-rule pt-5">
+              <Label className="font-display text-xs italic tracking-wide text-muted-foreground">
+                Holidays shown in the calendar
+              </Label>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {holidayDraft.length === 0 && (
+                  <span className="font-display text-xs italic text-muted-foreground/70">
+                    None — calendar will hide the holiday kicker
+                  </span>
+                )}
+                {holidayDraft.map((code) => (
+                  <span
+                    key={code}
+                    className="inline-flex items-center gap-1 rounded-full border border-rule bg-paper-warm/60 px-2 py-0.5 font-display text-xs"
+                  >
+                    <span className="font-mono text-[10px] text-muted-foreground">{code}</span>
+                    <span>{countryNameByCode.get(code) ?? code}</span>
+                    <button
+                      type="button"
+                      onClick={() => setHolidayDraft((prev) => prev.filter((c) => c !== code))}
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label={`Remove ${code}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-full border border-dashed border-rule px-2 py-0.5 font-display text-xs italic text-muted-foreground hover:border-accent hover:text-accent"
+                    >
+                      <Plus className="h-3 w-3" /> add country
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-72 p-2">
+                    <Input
+                      autoFocus
+                      placeholder="Search countries…"
+                      value={countrySearch}
+                      onChange={(e) => setCountrySearch(e.target.value)}
+                      className="h-8"
+                    />
+                    <div className="mt-2 max-h-60 overflow-y-auto">
+                      {filteredCountries.length === 0 && (
+                        <p className="px-2 py-4 text-center font-display text-xs italic text-muted-foreground">
+                          No matches
+                        </p>
+                      )}
+                      {filteredCountries.map((c) => (
+                        <button
+                          key={c.code}
+                          type="button"
+                          onClick={() => {
+                            setHolidayDraft((prev) => [...prev, c.code]);
+                            setCountrySearch("");
+                          }}
+                          className={cn(
+                            "flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors",
+                            "hover:bg-accent-soft",
+                          )}
+                        >
+                          <span className="truncate">{c.name}</span>
+                          <span className="font-mono text-[10px] text-muted-foreground">
+                            {c.code}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <label className="mt-1 flex items-center gap-2 font-display text-xs italic text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={showObservances}
+                  onChange={(e) => setShowObservances(e.target.checked)}
+                  className="h-3 w-3"
+                  disabled
+                />
+                Show observances too (coming soon)
+              </label>
+            </div>
+
             {profileError && <p className="text-sm text-destructive">{profileError}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setProfileOpen(false)}>

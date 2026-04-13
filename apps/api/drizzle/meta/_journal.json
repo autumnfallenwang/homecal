@@ -71,6 +71,13 @@
       "when": 1776100471693,
       "tag": "0009_puzzling_taskmaster",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1776114972483,
+      "tag": "0010_absurd_human_fly",
+      "breakpoints": true
     }
   ]
 }

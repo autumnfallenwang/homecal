@@ -1,7 +1,9 @@
 "use client";
 
+import type { Holiday } from "@homecal/shared";
 import type { CalendarEvent } from "@/hooks/use-events";
 import * as calUtils from "@/lib/calendar-utils";
+import { holidayKey, indexHolidaysByDate } from "@/lib/holiday-utils";
 import { DayCell } from "./day-cell";
 
 const DAY_HEADERS = [
@@ -18,6 +20,7 @@ interface MonthGridProps {
   year: number;
   month: number;
   events: CalendarEvent[];
+  holidays?: Holiday[];
   onEventClick?: (eventId: string) => void;
   onDayClick?: (date: Date) => void;
 }
@@ -26,7 +29,14 @@ function dateKey(date: Date): string {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
-export function MonthGrid({ year, month, events, onEventClick, onDayClick }: MonthGridProps) {
+export function MonthGrid({
+  year,
+  month,
+  events,
+  holidays = [],
+  onEventClick,
+  onDayClick,
+}: MonthGridProps) {
   const gridDates = calUtils.getMonthGridDates(year, month);
 
   // Group events by their start date (local timezone)
@@ -41,6 +51,8 @@ export function MonthGrid({ year, month, events, onEventClick, onDayClick }: Mon
       eventsByDay.set(key, [event]);
     }
   }
+
+  const holidaysByDate = indexHolidaysByDate(holidays);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -67,6 +79,7 @@ export function MonthGrid({ year, month, events, onEventClick, onDayClick }: Mon
             date={date}
             index={index}
             events={eventsByDay.get(dateKey(date)) ?? []}
+            holiday={holidaysByDate.get(holidayKey(date))}
             isCurrentMonth={calUtils.isSameMonth(date, year, month)}
             isToday={calUtils.isToday(date)}
             onEventClick={onEventClick}

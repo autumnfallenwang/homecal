@@ -20,6 +20,7 @@
     "@homecal/shared": "workspace:*",
     "@hono/node-server": "^1.19.9",
     "better-auth": "^1.4.19",
+    "date-holidays": "^3.27.0",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.11.9",
     "hono-rate-limiter": "^0.5.3",

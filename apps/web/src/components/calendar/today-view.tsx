@@ -1,8 +1,10 @@
 "use client";
 
+import type { Holiday } from "@homecal/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Member } from "@/hooks/use-members";
 import { useToday } from "@/hooks/use-today";
+import { holidayKey, indexHolidaysByDate } from "@/lib/holiday-utils";
 import { cn } from "@/lib/utils";
 import { formatHourMinute } from "./time-grid-utils";
 import { TodayGlance } from "./today-glance";
@@ -50,6 +52,7 @@ function SunIllustration() {
 interface TodayViewProps {
   currentUserId: string;
   members: Member[];
+  holidays?: Holiday[];
   onEventClick?: (eventId: string) => void;
   onNewEvent?: () => void;
   onJumpToTomorrow?: () => void;
@@ -66,6 +69,7 @@ function formatLongDate(iso: string): string {
 export function TodayView({
   currentUserId,
   members,
+  holidays = [],
   onEventClick,
   onNewEvent,
   onJumpToTomorrow,
@@ -78,6 +82,7 @@ export function TodayView({
   const serverNow = data ? new Date(data.serverNow) : new Date();
   const todayEvents = data?.today ?? [];
   const upcoming = todayEvents.find((e) => new Date(e.end) > serverNow);
+  const todayHoliday = indexHolidaysByDate(holidays).get(holidayKey(serverNow));
 
   const showTimelineSkeleton = isLoading && !data;
   const showEmptyState = !showTimelineSkeleton && todayEvents.length === 0;
@@ -147,12 +152,21 @@ export function TodayView({
           >
             {formatDayOfWeek(serverNow.toISOString())}
           </div>
+          {todayHoliday && !scrolled && (
+            <div className="mt-1 flex items-center gap-1.5 font-display text-sm italic text-muted-foreground md:text-base">
+              <span className="text-accent" aria-hidden>
+                ·
+              </span>
+              <span className="lowercase">
+                {todayHoliday.title} — observed in {todayHoliday.countries.join(", ").toLowerCase()}
+              </span>
+            </div>
+          )}
           <h1
             className={cn("font-display font-light leading-[0.9] tracking-tight transition-all")}
             style={{ fontSize: scrolled ? "1.75rem" : "clamp(3.75rem, 9vw, 8rem)" }}
           >
             {formatLongDate(serverNow.toISOString())}
-            <span className="font-display italic text-accent">,</span>
           </h1>
           {!scrolled && (
             <p className="mt-3 font-display text-lg italic text-muted-foreground md:text-xl">

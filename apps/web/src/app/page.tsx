@@ -11,7 +11,9 @@ import { TodayView } from "@/components/calendar/today-view";
 import { WeekGrid } from "@/components/calendar/week-grid";
 import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 import { type CalendarEvent, useEvents } from "@/hooks/use-events";
+import { useHolidays } from "@/hooks/use-holidays";
 import { useMembers } from "@/hooks/use-members";
+import { usePreferences } from "@/hooks/use-preferences";
 import {
   formatDayTitle,
   formatMonthYear,
@@ -75,6 +77,22 @@ export default function HomePage() {
 
   const { events, isLoading: eventsLoading, refetch } = useEvents(from, to);
   const { members, isLoading: membersLoading } = useMembers();
+  const { prefs } = usePreferences();
+
+  // Holiday range always has a value even in today view (where events skip
+  // fetching) so the today kicker can render without a separate endpoint.
+  const holidayRange = useMemo(() => {
+    if (view === "today") {
+      const t = new Date();
+      const iso = `${t.getFullYear()}-${(t.getMonth() + 1).toString().padStart(2, "0")}-${t
+        .getDate()
+        .toString()
+        .padStart(2, "0")}`;
+      return { from: iso, to: iso };
+    }
+    return { from, to };
+  }, [view, from, to]);
+  const { holidays } = useHolidays(prefs.holidayCountries, holidayRange.from, holidayRange.to);
 
   // Initialize visibleMemberIds once members load
   const activeMemberIds = useMemo(() => {
@@ -341,6 +359,7 @@ export default function HomePage() {
             <TodayView
               currentUserId={session.user.id}
               members={members}
+              holidays={holidays}
               onEventClick={handleEventClick}
               onNewEvent={handleNewEvent}
               onJumpToTomorrow={handleJumpToTomorrow}
@@ -352,6 +371,7 @@ export default function HomePage() {
               year={year}
               month={month}
               events={filteredEvents}
+              holidays={holidays}
               onEventClick={handleEventClick}
               onDayClick={handleDayClick}
             />
@@ -360,6 +380,7 @@ export default function HomePage() {
             <WeekGrid
               weekDates={weekDates}
               events={filteredEvents}
+              holidays={holidays}
               onEventClick={handleEventClick}
               onSlotClick={handleSlotClick}
             />
@@ -368,6 +389,7 @@ export default function HomePage() {
             <DayGrid
               date={dayAnchor}
               events={filteredEvents}
+              holidays={holidays}
               onEventClick={handleEventClick}
               onSlotClick={handleSlotClick}
             />

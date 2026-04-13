@@ -245,6 +245,7 @@ export function getOpenApiSpec() {
       { name: "users", description: "Family member directory + preferences" },
       { name: "devices", description: "Device tokens for push notifications" },
       { name: "admin", description: "Admin-only routes (sessions, password reset, API keys)" },
+      { name: "holidays", description: "Read-only national holidays layer (Phase 18)" },
     ],
     components: {
       securitySchemes: {
@@ -289,6 +290,18 @@ export function getOpenApiSpec() {
         RegisterDevice: toComponent(shared.registerDeviceSchema),
         CreateApiKey: toComponent(shared.createApiKeyInputSchema),
         CreateServiceAccount: toComponent(shared.createServiceAccountSchema),
+        HolidaysQuery: toComponent(shared.holidaysQuerySchema),
+        UserPreferences: toComponent(shared.userPreferencesSchema),
+        Holiday: {
+          type: "object",
+          properties: {
+            date: { type: "string", format: "date" },
+            title: { type: "string" },
+            countries: { type: "array", items: { type: "string" } },
+            type: { type: "string", enum: ["public"] },
+          },
+          required: ["date", "title", "countries", "type"],
+        },
       },
     },
     security: [{ cookieAuth: [] }, { bearerAuth: [] }, { apiKeyAuth: [] }],
@@ -781,6 +794,49 @@ export function getOpenApiSpec() {
           },
         },
       },
+      "/users/me/preferences": {
+        get: {
+          tags: ["users"],
+          summary: "Get the current user's preferences (holiday countries)",
+          description:
+            "When no preference is stored, derives a default from the request's `Accept-Language` header (without persisting). Empty array means no holidays are rendered.",
+          responses: {
+            200: {
+              description: "Current preferences",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/UserPreferences" },
+                },
+              },
+            },
+            ...UNAUTHORIZED,
+          },
+        },
+        patch: {
+          tags: ["users"],
+          summary: "Update the current user's preferences",
+          description:
+            "Empty array clears the preference so subsequent GETs fall back to the locale-derived default.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": { schema: { $ref: "#/components/schemas/UserPreferences" } },
+            },
+          },
+          responses: {
+            200: {
+              description: "Updated preferences",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/UserPreferences" },
+                },
+              },
+            },
+            ...VALIDATION,
+            ...UNAUTHORIZED,
+          },
+        },
+      },
       // ─── Devices ──────────────────────────────────────────────────────
       "/devices": {
         post: {
@@ -798,6 +854,79 @@ export function getOpenApiSpec() {
           tags: ["devices"],
           summary: "Unregister a device token",
           responses: { 200: OK_RESPONSE, ...UNAUTHORIZED },
+        },
+      },
+      // ─── Holidays (Phase 18) ──────────────────────────────────────────
+      "/holidays": {
+        get: {
+          tags: ["holidays"],
+          summary: "List public holidays for a country list + date range",
+          description:
+            "Computed on-the-fly from the `date-holidays` package — no DB, no sync. Multi-country (e.g. `countries=US,TW`) merges same-date entries into a single row with both country codes and a `·`-joined title. Public holidays only for v1.",
+          parameters: [
+            {
+              name: "countries",
+              in: "query",
+              required: true,
+              schema: { type: "string", pattern: "^[A-Z]{2}(,[A-Z]{2})*$" },
+              description: "Comma-separated ISO 3166-1 alpha-2 codes (e.g. `US,TW,GB`).",
+            },
+            {
+              name: "from",
+              in: "query",
+              required: true,
+              schema: { type: "string", format: "date" },
+              description: "ISO date — inclusive lower bound.",
+            },
+            {
+              name: "to",
+              in: "query",
+              required: true,
+              schema: { type: "string", format: "date" },
+              description: "ISO date — inclusive upper bound.",
+            },
+          ],
+          responses: {
+            200: {
+              description: "Deduped, sorted holiday list",
+              content: {
+                "application/json": {
+                  schema: { type: "array", items: { $ref: "#/components/schemas/Holiday" } },
+                },
+              },
+            },
+            ...VALIDATION,
+            ...UNAUTHORIZED,
+          },
+        },
+      },
+      "/holidays/countries": {
+        get: {
+          tags: ["holidays"],
+          summary: "List supported ISO 3166-1 alpha-2 country codes + names",
+          description:
+            "Used by the settings UI to render the holiday country multi-select. Sorted alphabetically by name. ~200 entries.",
+          responses: {
+            200: {
+              description: "Country list",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        code: { type: "string" },
+                        name: { type: "string" },
+                      },
+                      required: ["code", "name"],
+                    },
+                  },
+                },
+              },
+            },
+            ...UNAUTHORIZED,
+          },
         },
       },
       // ─── Admin ────────────────────────────────────────────────────────

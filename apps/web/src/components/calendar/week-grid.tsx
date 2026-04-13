@@ -1,10 +1,13 @@
 "use client";
 
+import type { Holiday } from "@homecal/shared";
 import { type MouseEvent, useEffect, useRef } from "react";
 import type { CalendarEvent } from "@/hooks/use-events";
 import { isToday } from "@/lib/calendar-utils";
+import { holidayKey, indexHolidaysByDate } from "@/lib/holiday-utils";
 import { cn } from "@/lib/utils";
 import { CurrentTimeLine } from "./current-time-line";
+import { HolidayKicker } from "./holiday-kicker";
 import {
   DEFAULT_SCROLL_HOUR,
   dateKey,
@@ -23,11 +26,19 @@ const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 interface WeekGridProps {
   weekDates: Date[];
   events: CalendarEvent[];
+  holidays?: Holiday[];
   onEventClick?: (eventId: string) => void;
   onSlotClick?: (date: Date) => void;
 }
 
-export function WeekGrid({ weekDates, events, onEventClick, onSlotClick }: WeekGridProps) {
+export function WeekGrid({
+  weekDates,
+  events,
+  holidays = [],
+  onEventClick,
+  onSlotClick,
+}: WeekGridProps) {
+  const holidaysByDate = indexHolidaysByDate(holidays);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Group events by day
@@ -87,6 +98,7 @@ export function WeekGrid({ weekDates, events, onEventClick, onSlotClick }: WeekG
         <div />
         {weekDates.map((date, i) => {
           const today = isToday(date);
+          const holiday = holidaysByDate.get(holidayKey(date));
           return (
             <div
               key={date.toISOString()}
@@ -111,6 +123,7 @@ export function WeekGrid({ weekDates, events, onEventClick, onSlotClick }: WeekG
               >
                 {date.getDate()}
               </span>
+              {holiday && <HolidayKicker holiday={holiday} variant="header" className="mt-0.5" />}
             </div>
           );
         })}
