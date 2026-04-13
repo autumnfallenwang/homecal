@@ -25,3 +25,27 @@ Corrections and patterns discovered during development. Claude reads this at the
 **Lesson**: when adding a FK constraint to an existing table, sweep the integration tests for any code that synthesizes the referenced id directly. Prefer a helper that actually inserts the parent row.
 
 **Lesson for test audits going forward**: don't assume pre-existing red tests are "someone else's problem" — they block prod deploy when `tsc` or CI gates are in the loop. File a dedicated fix task before shipping a big round.
+
+### Better Auth `apiKey` plugin gotchas (noted 2026-04-13, task 70)
+
+Three things that aren't obvious from the docs:
+
+1. **Plural table naming under `usePlural: true`** — Better Auth's drizzle adapter resolves the apiKey model as `schema.apikeys` when the adapter has `usePlural: true`. The Drizzle export AND the SQL `pgTable("apikeys", ...)` must both be plural. Singular `apikey` produces `BetterAuthError: The model "apikeys" was not found in the schema object`. Service-to-service pattern: one service user per calling app, store its api key as a shared secret in the caller's env.
+
+2. **Cross-user key creation requires headerless calls** — `auth.api.createApiKey({ body: { userId: ... }, headers })` THROWS `UNAUTHORIZED_SESSION` when the resolved session user doesn't match `body.userId`. Even an admin can't create keys for other users via the session-passing path. Workaround: in trusted server-side code (after your own admin gate), call `auth.api.createApiKey({ body })` **without** passing headers. BA treats that as a trusted call and uses `body.userId` directly.
+
+3. **`enableSessionForAPIKeys` defaults to false** — if you want `auth.api.getSession({ headers })` to resolve `x-api-key` headers into a session, you have to set this option explicitly. Without it, the existing `requireAuth` middleware silently fails to authenticate api-key callers.
+
+4. **Deleted/expired keys throw `APIError`, not `null`** — `auth.api.getSession` can throw when an x-api-key header is invalid. `requireAuth` should wrap the call in `try/catch` and return 401, otherwise the error bubbles up as a 500 from Hono's default handler.
+
+### OpenAPI: handwritten spec beats `@hono/zod-openapi` migration (noted 2026-04-13, task 73)
+
+**Original plan**: migrate every route from `new Hono()` to `new OpenAPIHono()` + `createRoute({ method, path, request, responses })` so the spec is generated from real handlers.
+
+**What I shipped instead**: hand-curated `apps/api/src/openapi/spec.ts` returning a static OpenAPI 3.1 object, with `components.schemas` derived from existing `@homecal/shared` Zod schemas via `zod-to-json-schema` (target `openApi3`). Mounted at `GET /api/openapi.json` + `GET /api/docs` (Swagger UI loaded from a CDN — no `@hono/swagger-ui` dep). 9 integration tests assert the structure.
+
+**Why**: the route migration would have touched events.ts (300+ lines), series.ts, reminders.ts, devices.ts, admin.ts, users.ts — every handler signature, every middleware chain, every test setup. ~5h of mechanical risk for documentation. The hand-curated approach took ~1h, ships the same Swagger UI, and produces an OpenAPI spec good enough for `openapi-typescript` to generate clients. Better Auth's `/api/auth/*` routes can't be migrated anyway.
+
+**Drawback**: the spec drifts from reality if a route changes without updating the spec file. Mitigation: integration test asserts presence of expected paths so adding a new route surfaces a failure as soon as the test list is updated, and the spec file lives alongside the routes in `apps/api/src/openapi/`.
+
+**Lesson**: when tooling demands a full handler rewrite for a docs feature, write the docs by hand and revisit if/when a real reason to migrate appears (e.g. needing per-handler OpenAPI overrides at scale).

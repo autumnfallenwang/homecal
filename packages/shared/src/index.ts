@@ -74,6 +74,14 @@ export const registerDeviceSchema = z.object({
   token: z.string().min(1).max(4096),
 });
 
+// Admin API keys (Phase 16 task 70) — for service-to-service auth.
+export const createApiKeyInputSchema = z.object({
+  name: z.string().min(1).max(32),
+  userId: z.string().uuid(),
+  prefix: z.string().max(16).optional(),
+  expiresInDays: z.number().int().positive().max(3650).optional(),
+});
+
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type EventQuery = z.infer<typeof eventQuerySchema>;
@@ -84,3 +92,4 @@ export type ParseImageInput = z.infer<typeof parseImageInputSchema>;
 export type ParsedEvent = z.infer<typeof parsedEventSchema>;
 export type CreateReminderInput = z.infer<typeof createReminderSchema>;
 export type RegisterDeviceInput = z.infer<typeof registerDeviceSchema>;
+export type CreateApiKeyInput = z.infer<typeof createApiKeyInputSchema>;

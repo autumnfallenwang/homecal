@@ -382,7 +382,64 @@ HomeCal's backend is already a real HTTP service (Hono + Drizzle + Postgres + Be
 - OAuth / external-app delegated auth (e.g. another family's HomeCal talking to ours). API keys cover internal apps; OAuth is a different problem.
 - Webhook outbound events (HomeCal → other apps). Polling works for now.
 
-### Phase 17 — National holidays (multi-country, read-only layer)
+### Phase 17 — Service Account & API Key Management UI
+Phase 16 shipped the **infrastructure** for service-to-service calls (Better Auth apiKey plugin, rate limit, `/api/v1` versioning, OpenAPI spec). This phase ships the **management surface** so admins can create, monitor, rotate, and revoke service accounts and their keys without ever touching curl. Adds a "Services" tab to the existing `/admin` Family page.
+
+**Mental model** (recorded in `lessons.md`): HomeCal uses the GitHub PAT pattern. A service account is just a normal user record with `isService=true`, password is a throwaway (random + discarded). The actual credential is the API key minted under that user. The user record exists as a permission anchor — its role determines whether keys minted under it can hit admin routes.
+
+**Aesthetic direction** (locked, Warm Editorial):
+- Service cards are **square (1:1)** to break visual rhythm from family's portrait (4:5)
+- **Inline SVG line-art icons** (key, terminal, robot) instead of colored avatar circles — signals "machine, not person"
+- **Fraunces** for the service name (consistency); **IBM Plex Mono** for masked key prefixes (`hc_••••a3f2`) — typography signals "machine"
+- **No member color** — service cards use foreground/muted with terracotta accent only on hover and active key states
+- **Tab switcher** at the top of the Family page: `[Family] [Services]`, same pill style as the calendar view toggle, `?tab=services` URL persistence
+- **Reveal-once card** for plaintext keys reuses the temp-password reveal pattern from task 67 (terracotta border, monospace text, Copy + Check confirmation)
+
+#### Backend
+
+74. Service account flag + one-shot create endpoint —
+    - **Migration**: add `users.isService boolean not null default false`
+    - **New route** `POST /api/admin/service-accounts` with body `{ name, role: "user" | "admin", color? }`. Generates 32 bytes of random as a throwaway password, calls `auth.api.createUser`, sets `isService: true`, returns the new user record (no password in response).
+    - **Filter** `GET /api/users` to `WHERE isService = false` so the calendar member filter never shows service accounts.
+    - **Better Auth** `admin.listUsers` keeps returning everyone — admin needs to see them; the family-card filter at the UI layer hides them from the Family tab.
+    - **Tests**: 401 unauth, 403 non-admin, 400 invalid name, 200 create + flag set, `/api/users` excludes them, role honored.
+
+75. API key list metadata + rotation endpoint —
+    - **Update `GET /api/admin/api-keys`** response to include `lastRequest`, `requestCount`, `enabled`, `name` (already exist on the row, just surface them).
+    - **New `POST /api/admin/api-keys/:id/rotate`** — looks up the existing key, mints a new one with the same `name` and `userId` via `auth.api.createApiKey`, returns the new plaintext. **Does NOT auto-delete the old key** — admin manually revokes after migrating the calling app. Keeps a grace period without scheduled-deletion complexity.
+    - **Tests**: rotate creates new key, response has plaintext, old key still works until manually revoked, 401/403/404 cases.
+
+76. Service accounts list endpoint —
+    - **New `GET /api/admin/service-accounts`** returns shaped `[{ user: {id, name, role, banned, createdAt}, keys: [{id, name, prefix, lastRequest, requestCount, enabled, createdAt, expiresAt}] }]` for everyone with `isService=true`. Single roundtrip avoids N+1 fetches in the UI.
+    - **Tests**: 401, 403, empty list, populated list with multiple keys per service, ordering.
+
+#### Frontend
+
+77. Tab switcher + Services list page —
+    - **Refactor `app/admin/page.tsx`** to render a tab switcher under the hero with two segments (`Family`, `Services`), `?tab=services` URL persistence, default = `Family`.
+    - **Family tab** keeps the existing portrait grid filtered to `!isService` users.
+    - **Services tab** renders new `components/admin/services-grid.tsx` — square cards (`aspect-square`), inline SVG line-art icon at top-left, Fraunces name centered, Inter Tight role badge + Active/Paused dot, IBM Plex Mono `N keys · last active {relative}` row at the bottom. Last grid cell is `AddServiceCard` (ghost dashed, large `+`, "Add a service account") opening the drawer in `new` mode.
+    - **New `useServiceAccounts()` hook** fetches `/api/admin/service-accounts`.
+
+78. Service Account drawer —
+    - **New `components/admin/service-account-drawer.tsx`** using the existing `<Sheet>` primitive (right side, slides full-width on mobile via the responsive variant from task 68).
+    - **Sections**:
+      - **Header**: large square line-art icon, Fraunces name (inline editable on click), Inter Tight italic role + status row.
+      - **Identity**: name + email + role toggle + Active/Paused switch, all inline. Color picker omitted (services don't appear in the calendar).
+      - **API keys** — the main payload:
+        - List of keys: small key icon + Inter Tight medium name + IBM Plex Mono masked prefix (`hc_••••a3f2`) + Fraunces italic relative `lastRequest` (or "never used") + tabular `requestCount`. Per-row "Rotate" + "Revoke" buttons.
+        - **Mint new key** terracotta button at the top of the section. Click → inline form with a `name` text input + Mint button → on success, replaces the form with a reveal-once card showing the plaintext key + Copy button + Check confirmation icon (same pattern as the temp password flow from task 67). Rotated keys also surface their plaintext via the same card.
+      - **Danger zone**: "Remove service account" with two-step name-confirm (same pattern as task 67 member drawer).
+    - **New-mode** (opened from `AddServiceCard`): identity fields blank, no API keys section (no service yet), Save button creates the service account → on success transitions the drawer into edit mode for the just-created account so the admin can immediately mint the first key.
+
+79. Polish + browser verification —
+    - **Empty state** for the Services tab: Fraunces italic *"No service accounts yet — add your first one to let other apps talk to HomeCal."* + inline SVG key/terminal illustration + AddServiceCard.
+    - **Loading skeletons**: 4 shimmer square cards for the grid, monospace shimmer rows for the keys list inside the drawer.
+    - **Confirmation toasts/inline messages** for rotate + revoke (reuse the temp-password copy/check pattern — no sonner dep needed).
+    - **Browser verification** at 1440/1024/768/390px for both tabs and the drawer in both modes.
+    - **Update `lessons.md`** with the GitHub PAT mental model (HomeCal uses the user-as-permission-anchor model, password is vestigial).
+
+### Phase 18 — National holidays (multi-country, read-only layer)
 Follows the universal calendar-app pattern: holidays are a **separate, read-only layer**, not mixed into the user's events. Backed by the pure-JS `date-holidays` npm package (MIT, 200+ countries, zero network calls) so there's no DB storage, no sync job, and no admin UI — holidays are computed on-the-fly from `(country, year)` at request time.
 
 **Scope for v1**:
@@ -400,15 +457,15 @@ Follows the universal calendar-app pattern: holidays are a **separate, read-only
 
 Why not a ribbon/pill: too AI-default. Italic kicker + terracotta dot is typographic-forward, matches the rest of Warm Editorial, and avoids competing with event pills for cell space.
 
-74. Holidays service + endpoint — add `date-holidays` as an `@homecal/api` dependency. New `apps/api/src/services/holidays.ts` with `getHolidays({ countries, from, to })` that iterates year ranges, filters `type === "public"`, dedupes by `date|title` across countries, and returns `[{ date, title, country, type }]`. New route `GET /api/holidays?countries=US,TW&from=...&to=...` with shared Zod schema (comma-separated countries, ISO date range). Response is cached per `(countries, from, to)` tuple for the lifetime of the request via a small in-memory LRU (~100 entries) to avoid recomputing when month + week views both query the same range. Unit tests: year-boundary span (Dec 20 → Jan 5 picks up both years), multi-country dedup (July 4 US alone, May 5 in TW alone, single result), public-only filter (no Halloween), unknown country code returns 400.
+80. Holidays service + endpoint — add `date-holidays` as an `@homecal/api` dependency. New `apps/api/src/services/holidays.ts` with `getHolidays({ countries, from, to })` that iterates year ranges, filters `type === "public"`, dedupes by `date|title` across countries, and returns `[{ date, title, country, type }]`. New route `GET /api/holidays?countries=US,TW&from=...&to=...` with shared Zod schema (comma-separated countries, ISO date range). Response is cached per `(countries, from, to)` tuple for the lifetime of the request via a small in-memory LRU (~100 entries) to avoid recomputing when month + week views both query the same range. Unit tests: year-boundary span (Dec 20 → Jan 5 picks up both years), multi-country dedup (July 4 US alone, May 5 in TW alone, single result), public-only filter (no Halloween), unknown country code returns 400.
 
-75. User country preference — migration adds `holidayCountries text[]` (nullable) to the `users` table. Better Auth's admin/updateUser already accepts arbitrary `data: { ... }` fields so no plugin changes needed. New GET/PATCH at `/api/users/me/preferences` for the current user to read/write their own countries (avoids routing through Better Auth for the hot path). Default on first visit: derive from `Intl.DateTimeFormat().resolvedOptions().locale` region segment (e.g. `en-US` → `["US"]`), persist on first save. Shared Zod schema `userPreferencesSchema` in `packages/shared`. Unit tests for locale → country mapping + the schema; integration test for GET/PATCH round-trip.
+81. User country preference — migration adds `holidayCountries text[]` (nullable) to the `users` table. Better Auth's admin/updateUser already accepts arbitrary `data: { ... }` fields so no plugin changes needed. New GET/PATCH at `/api/users/me/preferences` for the current user to read/write their own countries (avoids routing through Better Auth for the hot path). Default on first visit: derive from `Intl.DateTimeFormat().resolvedOptions().locale` region segment (e.g. `en-US` → `["US"]`), persist on first save. Shared Zod schema `userPreferencesSchema` in `packages/shared`. Unit tests for locale → country mapping + the schema; integration test for GET/PATCH round-trip.
 
-76. Kicker rendering across calendar views — new `useHolidays(countries, from, to)` hook mirroring `useEvents`. `day-cell.tsx` gets a `holidays` prop and renders a `HolidayKicker` component absolutely positioned at the top of the cell (above the date numeral), Fraunces italic lowercase, `text-[10px]` with tracking-tight, terracotta `·` prefix, truncates. Cell `min-h-*` stays the same (kicker is absolutely positioned). `week-grid.tsx` + `day-grid.tsx` headers get the same kicker. `month-grid.tsx` + `week-grid.tsx` fetch holidays once per view-range load via the shared hook. Click opens `EventDetailPopover` in a new `readOnly` mode — added as an optional prop so month-view "+N more" keeps its existing behavior.
+82. Kicker rendering across calendar views — new `useHolidays(countries, from, to)` hook mirroring `useEvents`. `day-cell.tsx` gets a `holidays` prop and renders a `HolidayKicker` component absolutely positioned at the top of the cell (above the date numeral), Fraunces italic lowercase, `text-[10px]` with tracking-tight, terracotta `·` prefix, truncates. Cell `min-h-*` stays the same (kicker is absolutely positioned). `week-grid.tsx` + `day-grid.tsx` headers get the same kicker. `month-grid.tsx` + `week-grid.tsx` fetch holidays once per view-range load via the shared hook. Click opens `EventDetailPopover` in a new `readOnly` mode — added as an optional prop so month-view "+N more" keeps its existing behavior.
 
-77. Today view holiday line + settings UI — `today-view.tsx` renders an italic kicker (`"memorial day — observed in us"`) between the weekday label and the massive date hero, only when `today` is a holiday. Count is unaffected — holidays never appear in "N events today". In the `calendar-header` settings modal, add a new **Holidays** section: Fraunces italic label, a multi-select of country codes with a small searchable list sourced from `date-holidays`'s `getCountries()` (about 200 entries, lazy-loaded), default pulled from locale. Save goes through the task-75 PATCH endpoint. Also flag a "Show observances too" checkbox but keep it wired to a no-op for v1 (future-proofing without shipping the feature). Browser verification at 1440/1024/768/390px on a known holiday date.
+83. Today view holiday line + settings UI — `today-view.tsx` renders an italic kicker (`"memorial day — observed in us"`) between the weekday label and the massive date hero, only when `today` is a holiday. Count is unaffected — holidays never appear in "N events today". In the `calendar-header` settings modal, add a new **Holidays** section: Fraunces italic label, a multi-select of country codes with a small searchable list sourced from `date-holidays`'s `getCountries()` (about 200 entries, lazy-loaded), default pulled from locale. Save goes through the task-81 PATCH endpoint. Also flag a "Show observances too" checkbox but keep it wired to a no-op for v1 (future-proofing without shipping the feature). Browser verification at 1440/1024/768/390px on a known holiday date.
 
-### Phase 18 — Future Enhancements (deferred)
+### Phase 19 — Future Enhancements (deferred)
 - iOS push via APNs — enable when Apple Developer account is available
 - Web Push notifications — Service Worker + Web Push API (add if users want desktop alerts)
 - iOS voice input — Speech framework mic button → parse endpoint (requires physical device)

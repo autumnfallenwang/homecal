@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { admin, bearer } from "better-auth/plugins";
+import { admin, apiKey, bearer } from "better-auth/plugins";
 import { count } from "drizzle-orm";
 import { db } from "./db/index.js";
 import * as schema from "./db/schema.js";
@@ -29,7 +29,19 @@ export const auth = betterAuth({
       generateId: false, // PostgreSQL generates UUIDs
     },
   },
-  plugins: [admin(), bearer()],
+  plugins: [
+    admin(),
+    bearer(),
+    apiKey({
+      apiKeyHeaders: "x-api-key",
+      defaultPrefix: "hc_",
+      requireName: true,
+      // Let the plugin attach a Session object when an x-api-key header is
+      // present so our existing `requireAuth` middleware (which delegates to
+      // `auth.api.getSession`) accepts API keys end-to-end.
+      enableSessionForAPIKeys: true,
+    }),
+  ],
   databaseHooks: {
     user: {
       create: {

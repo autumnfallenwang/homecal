@@ -57,6 +57,13 @@
       "when": 1775260400596,
       "tag": "0007_dark_microbe",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1776095809322,
+      "tag": "0008_oval_ultimates",
+      "breakpoints": true
     }
   ]
 }

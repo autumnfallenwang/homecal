@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "tsx src/index.ts",
     "test": "vitest run",
-    "test:fast": "vitest run --exclude 'tests/**/*.integration.test.ts'",
+    "test:fast": "vitest run --exclude 'tests/**/*.integration.test.ts' --exclude 'tests/**/*.e2e.test.ts'",
+    "test:e2e": "vitest run tests/e2e",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
@@ -21,10 +22,12 @@
     "better-auth": "^1.4.19",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.11.9",
+    "hono-rate-limiter": "^0.5.3",
     "node-ical": "^0.26.0",
     "nodemailer": "^8.0.4",
     "postgres": "^3.4.8",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",

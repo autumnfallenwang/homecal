@@ -179,6 +179,35 @@ export const deviceTokens = pgTable(
   ],
 );
 
+// Better Auth apiKey plugin table. With `usePlural: true` in our adapter
+// config, BA looks for `schema.apikeys` (plural). Both the Drizzle export
+// and the SQL table name use the plural form.
+export const apikeys = pgTable("apikeys", {
+  id: uuid().primaryKey().defaultRandom(),
+  name: text(),
+  start: text(),
+  prefix: text(),
+  key: text().notNull(),
+  userId: uuid()
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  refillInterval: integer(),
+  refillAmount: integer(),
+  lastRefillAt: timestamp({ withTimezone: true }),
+  enabled: boolean().notNull().default(true),
+  rateLimitEnabled: boolean().notNull().default(true),
+  rateLimitTimeWindow: integer(),
+  rateLimitMax: integer(),
+  requestCount: integer().notNull().default(0),
+  remaining: integer(),
+  lastRequest: timestamp({ withTimezone: true }),
+  expiresAt: timestamp({ withTimezone: true }),
+  permissions: text(),
+  metadata: text(),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
 // Relations for Drizzle relational query builder
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -188,6 +217,11 @@ export const usersRelations = relations(users, ({ many }) => ({
   deviceTokens: many(deviceTokens),
   sessions: many(sessions),
   accounts: many(accounts),
+  apikeyss: many(apikeys),
+}));
+
+export const apikeysRelations = relations(apikeys, ({ one }) => ({
+  user: one(users, { fields: [apikeys.userId], references: [users.id] }),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
