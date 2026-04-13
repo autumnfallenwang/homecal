@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -27,11 +26,32 @@ beforeEach(async () => {
   await db.delete(schema.eventAssignees);
   await db.delete(schema.eventLogs);
   await db.delete(schema.events);
+  await db.delete(schema.series);
   await db.delete(schema.sessions);
   await db.delete(schema.accounts);
   await db.delete(schema.verifications);
   await db.delete(schema.users);
 });
+
+/**
+ * Insert a bare-minimum series row so that events referencing it can
+ * satisfy the foreign-key constraint added in Phase 9 task 40.
+ */
+async function createSeries(): Promise<string> {
+  const [row] = await db
+    .insert(schema.series)
+    .values({
+      startDate: "2026-04-06",
+      endDate: "2026-04-27",
+      startTime: "09:00",
+      endTime: "09:30",
+      repeatEvery: 1,
+      repeatUnit: "weeks",
+      weekDays: "0",
+    })
+    .returning({ id: schema.series.id });
+  return row.id;
+}
 
 function req(path: string, init?: RequestInit) {
   return app.request(path, init);
@@ -71,7 +91,7 @@ async function createEvent(
 describe("Series events", () => {
   it("creates events with shared seriesId", async () => {
     const alice = await createUser("Alice", "alice@test.com");
-    const seriesId = randomUUID();
+    const seriesId = await createSeries();
 
     const { body: e1 } = await createEvent(alice, {
       title: "Weekly Standup",
@@ -104,7 +124,7 @@ describe("Series events", () => {
 
   it("GET / returns seriesId in response", async () => {
     const alice = await createUser("Alice", "alice@test.com");
-    const seriesId = randomUUID();
+    const seriesId = await createSeries();
 
     await createEvent(alice, {
       title: "Series Event",
@@ -123,7 +143,7 @@ describe("Series events", () => {
 describe("PATCH /api/events/series/:seriesId", () => {
   it("bulk updates all events in a series", async () => {
     const alice = await createUser("Alice", "alice@test.com");
-    const seriesId = randomUUID();
+    const seriesId = await createSeries();
 
     await createEvent(alice, {
       title: "Old Title",
@@ -157,7 +177,7 @@ describe("PATCH /api/events/series/:seriesId", () => {
   it("returns 404 for non-existent series", async () => {
     const alice = await createUser("Alice", "alice@test.com");
 
-    const res = await req(`/api/events/series/${randomUUID()}`, {
+    const res = await req(`/api/events/series/00000000-0000-0000-0000-000000000000`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Cookie: alice },
       body: JSON.stringify({ title: "New" }),
@@ -167,7 +187,7 @@ describe("PATCH /api/events/series/:seriesId", () => {
   });
 
   it("returns 401 without auth", async () => {
-    const res = await req(`/api/events/series/${randomUUID()}`, {
+    const res = await req(`/api/events/series/00000000-0000-0000-0000-000000000000`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "New" }),
@@ -180,7 +200,7 @@ describe("PATCH /api/events/series/:seriesId", () => {
 describe("DELETE /api/events/series/:seriesId", () => {
   it("bulk deletes all events in a series", async () => {
     const alice = await createUser("Alice", "alice@test.com");
-    const seriesId = randomUUID();
+    const seriesId = await createSeries();
 
     await createEvent(alice, {
       title: "To Delete",
@@ -213,7 +233,7 @@ describe("DELETE /api/events/series/:seriesId", () => {
   it("returns 404 for non-existent series", async () => {
     const alice = await createUser("Alice", "alice@test.com");
 
-    const res = await req(`/api/events/series/${randomUUID()}`, {
+    const res = await req(`/api/events/series/00000000-0000-0000-0000-000000000000`, {
       method: "DELETE",
       headers: { Cookie: alice },
     });
@@ -223,7 +243,7 @@ describe("DELETE /api/events/series/:seriesId", () => {
 
   it("does not delete single events (no seriesId)", async () => {
     const alice = await createUser("Alice", "alice@test.com");
-    const seriesId = randomUUID();
+    const seriesId = await createSeries();
 
     // Create a series event and a single event
     await createEvent(alice, {

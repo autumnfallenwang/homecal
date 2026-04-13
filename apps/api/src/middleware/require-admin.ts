@@ -10,7 +10,8 @@ type Session = typeof auth.$Infer.Session;
 export const requireAdmin = createMiddleware<{
   // biome-ignore lint/style/useNamingConvention: Hono middleware Variables convention
   Variables: { user: Session["user"]; session: Session["session"] };
-}>((c, next) => {
+  // biome-ignore lint/suspicious/useAwait: Hono middleware handlers must be async functions
+}>(async (c, next) => {
   const user = c.get("user");
   if (!user || user.role !== "admin") {
     return c.json({ error: "Forbidden" }, 403);

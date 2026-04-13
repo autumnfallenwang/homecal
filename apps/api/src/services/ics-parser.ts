@@ -28,6 +28,19 @@ function addDays(date: Date, days: number): Date {
   return result;
 }
 
+// node-ical typed fields like summary/location/description can come through
+// as either a plain string or a `{ val: string; params: ... }` object (when the
+// VEVENT has parameters like LANGUAGE). Normalize both to a plain string.
+function icsString(v: unknown): string {
+  if (!v) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "object" && v !== null && "val" in v) {
+    const val = (v as { val: unknown }).val;
+    return typeof val === "string" ? val : "";
+  }
+  return "";
+}
+
 export function parseIcsEvents(icsText: string): ParseIcsResult {
   let parsed: ical.CalendarResponse;
   try {
@@ -41,7 +54,7 @@ export function parseIcsEvents(icsText: string): ParseIcsResult {
 
   for (const key of Object.keys(parsed)) {
     const entry = parsed[key];
-    if (entry.type !== "VEVENT") continue;
+    if (!entry || entry.type !== "VEVENT") continue;
 
     const vevent = entry as ical.VEvent;
 
@@ -74,11 +87,11 @@ export function parseIcsEvents(icsText: string): ParseIcsResult {
     }
 
     events.push({
-      title: vevent.summary || "Untitled",
+      title: icsString(vevent.summary) || "Untitled",
       start: startStr,
       end: endStr,
-      location: vevent.location || "",
-      description: vevent.description || "",
+      location: icsString(vevent.location),
+      description: icsString(vevent.description),
       isPrivate: vevent.class === "PRIVATE",
       isAllDay,
     });

@@ -12,13 +12,16 @@ Corrections and patterns discovered during development. Claude reads this at the
 
 ## Entries
 
-### Pre-existing broken API build + series integration tests (noted 2026-04-13)
+### Resolved — pre-existing API build + series integration tests (fixed 2026-04-13 via task 69)
 
-**State**: `apps/api` has two pre-existing issues on `main` that are unrelated to any current task:
+**Was**: `apps/api` had two pre-existing failures on `main` carried across Phase 13–15:
+1. `tsc` build failed in `src/services/ics-parser.ts` — `node-ical`'s `summary`/`location`/`description` fields can be `string | { val: string; params }` but the code assigned them directly to a `string` field.
+2. `series.integration.test.ts` — 5 tests failed because they generated raw `randomUUID()` values for `seriesId` and hit the Phase 9 task 40 `events.seriesId → series.id` FK constraint that the tests pre-date.
 
-1. **`tsc` build fails** in `src/services/ics-parser.ts` — 4 TS2322/TS18048 errors where `node-ical`'s `ParameterValue<string, ...>` type is being assigned to `string` without `.val` extraction. Lines 44, 77, 80, 81.
-2. **`tests/events/series.integration.test.ts`** — 5 tests fail with `SyntaxError: Unexpected token 'I', "Internal S"...` because the server returns `Internal Server Error` HTML (not JSON) when creating series. Something in the `/api/events` or `/api/series` POST handler is throwing under test. Pre-existing.
+**Resolution** (pre-deploy fix task 69):
+- `ics-parser.ts`: added `icsString(v)` helper that accepts either shape and returns a plain string; added a null guard on `parsed[key]`.
+- `series.integration.test.ts`: added a `createSeries()` helper that inserts a real series row before each event, plus `schema.series` to the `beforeEach` cleanup list. Non-existent-series 404 tests keep a hardcoded zero UUID.
 
-**Why this matters**: when running `/check all` or `pnpm --filter @homecal/api build`, these will fail regardless of what the current task did. Verify failures are *new* by running `git stash && pnpm build && git stash pop` before assuming a regression.
+**Lesson**: when adding a FK constraint to an existing table, sweep the integration tests for any code that synthesizes the referenced id directly. Prefer a helper that actually inserts the parent row.
 
-**Don't fix as a side effect** of an unrelated task — file a dedicated task to address these, since fixing them touches different code paths and deserves its own commit.
+**Lesson for test audits going forward**: don't assume pre-existing red tests are "someone else's problem" — they block prod deploy when `tsc` or CI gates are in the loop. File a dedicated fix task before shipping a big round.

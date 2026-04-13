@@ -163,6 +163,14 @@ Reframe `/admin` as **Family** — warm portrait grid of member cards + Radix `S
 | 67 | Member detail drawer | ✅ Done | New `components/ui/sheet.tsx` shadcn primitive wrapping `radix-ui` Dialog, `side: "right" \| "bottom"` variants. New `components/admin/member-drawer.tsx` with sections: (1) portrait header with avatar + Fraunces italic-comma title, (2) Name/Email/Color inline edit (color swatch + native picker + hex), (3) Role & status switches (Admin + Active/Paused), (4) Password — "Reset password" button calls task-65 endpoint, surfaces plaintext in a terracotta-bordered box with Copy button + Check confirmation icon (no sonner dep, just inline UI), (5) Sessions — fetched from task-64 API, per-row "Sign out" + "Sign out everywhere" destructive link, (6) Danger zone — "Remove from family" with two-step confirmation that requires typing the member's name. New-member mode uses bootstrap password → immediate reset so the temp password appears inline. `app/admin/page.tsx` wires `<MemberDrawer>` with `onSaved → fetchUsers`. Browser-verified: Bob card click opens drawer, password reset surfaces monospace pw + Copy button, sessions list shows 2 entries with revoke buttons |
 | 68 | Empty, loading, mobile polish | ✅ Done | `ui/sheet.tsx` `right` variant now automatically becomes a bottom sheet (85vh, rounded-top-3xl, `slide-in-from-bottom`) on `<md` and flips to a right drawer with `md:` classes on tablet+. Member drawer's `max-w-md` override dropped so the responsive sheet classes take over. Skeleton grid (4 shimmer cards) from task 66 covers loading. `Esc` close already handled by Radix. Skipped `/` jump input — unnecessary at 4–8 member family scale per design-plan rationale. Role-gated access still redirects non-admin to `/` + API 403. Browser-verified at 1440 (right drawer) + 390 (bottom sheet slides up, all sections scroll, rounded corners). Phase 15 complete |
 
+## Ops: Pre-deploy fixes (tasks 13–15 round)
+
+Blockers uncovered during the pre-production audit of the Phase 13–15 round. Fixed as a single pre-deploy task so prod can pick up the whole visual refresh + Today view + Family page at once.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 69 | Pre-deploy build + test fixes | ✅ Done | **`ics-parser.ts` TS build errors** (pre-existing, Phase 12): added `icsString(v)` helper that normalizes node-ical's `string \| { val: string }` shape on `summary`/`location`/`description`, plus a null guard on the keyed parsed entry. **`require-admin.ts` TS error** (Phase 15 regression): restored `async` on the middleware handler (Hono's `createMiddleware` types require it) with a biome-ignore for the `useAwait` rule. **`series.integration.test.ts` 5 failing tests** (pre-existing, Phase 9): tests were generating raw `randomUUID()` seriesIds that hit the Phase 9 task 40 `events.seriesId → series.id` FK constraint; added a `createSeries()` helper that inserts a real series row and swapped the 5 event-linking spots to use it. Non-existent-series 404 tests keep a hardcoded zero UUID. **Results**: `pnpm lint` clean, `pnpm build` clean both packages, `pnpm --filter @homecal/api test` now 25 files / 345 passing (was 24/340). Lessons note updated |
+
 ## Phase 16: Future Enhancements (deferred)
 
 | # | Task | Status | Notes |
@@ -208,7 +216,7 @@ Reframe `/admin` as **Family** — warm portrait grid of member cards + Radix `S
 
 ## What's Next
 
-**Phase 15 complete** — all tasks 64–68 done. Family page refresh ships end-to-end: admin sessions API, temp password generator, portrait grid with FamilyCards + InviteCard, Radix-based member drawer (right on desktop, bottom sheet on mobile) with inline identity editing, password reset with inline plaintext + copy, sessions management, role/status toggles, and name-confirm danger zone removal. **All Phase 13–15 work is now complete.** Remaining unscheduled work lives in Phase 16 (iOS push, Web Push, iOS voice, Today/Family iOS ports, ambient widgets).
+**Phase 13–15 + pre-deploy fixes all complete — ready for prod.** The full round ships: Warm Editorial refresh, Today view, Family page + admin APIs. Pre-existing ics-parser, require-admin, and series integration test failures are all resolved via task 69. Full suite: `pnpm lint` clean, `pnpm build` clean both packages, 345/345 tests passing. **Next step: `homecal update` on prod.** Remaining unscheduled work lives in Phase 16 (iOS push, Web Push, iOS voice, Today/Family iOS ports, ambient widgets).
 
 ## Reference Docs
 
