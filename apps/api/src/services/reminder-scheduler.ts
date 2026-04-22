@@ -78,6 +78,8 @@ export async function checkDueReminders(fns?: DispatchFns): Promise<number> {
     const assigneeIds = assignees.map((a) => a.userId);
     const bodyText = formatReminderBody(reminder.minutesBefore);
 
+    let deliveryOk = true;
+
     if (reminder.channel === "email") {
       // Get assignees' email addresses
       const assigneeUsers = await db
@@ -93,15 +95,22 @@ export async function checkDueReminders(fns?: DispatchFns): Promise<number> {
       for (const user of assigneeUsers) {
         if (!emailConfig && !fns?.emailFn) {
           console.warn("[reminder-scheduler] Email not configured, skipping");
+          deliveryOk = false;
           continue;
         }
         const config = emailConfig as EmailConfig;
-        await email(
+        const result = await email(
           config,
           user.email,
           `Reminder: ${reminder.eventTitle}`,
           `${reminder.eventTitle} — ${bodyText}`,
         );
+        if (!result.success) {
+          console.error(
+            `[reminder-scheduler] email send failed: reminder=${reminder.reminderId} to=${user.email} err=${result.error}`,
+          );
+          deliveryOk = false;
+        }
       }
     } else if (reminder.channel === "push") {
       // Get device tokens for all assignees
@@ -140,13 +149,14 @@ export async function checkDueReminders(fns?: DispatchFns): Promise<number> {
       }
     }
 
-    // Mark reminder as sent
-    await db
-      .update(eventReminders)
-      .set({ sentAt: new Date() })
-      .where(eq(eventReminders.id, reminder.reminderId));
-
-    sentCount++;
+    // Only mark reminder as sent if delivery succeeded (otherwise retry next tick)
+    if (deliveryOk) {
+      await db
+        .update(eventReminders)
+        .set({ sentAt: new Date() })
+        .where(eq(eventReminders.id, reminder.reminderId));
+      sentCount++;
+    }
   }
 
   return sentCount;

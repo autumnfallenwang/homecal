@@ -31,6 +31,8 @@ services:
     environment:
       - API_PORT=51001
       - DATABASE_URL=postgresql://homecal:homecal_prod@localhost:51432/homecal_prod
+    volumes:
+      - /etc/resolv.conf:/etc/resolv.conf:ro
 
   homecal-web:
     build:
@@ -47,6 +49,8 @@ services:
     environment:
       - PORT=51000
       - HOSTNAME=0.0.0.0
+    volumes:
+      - /etc/resolv.conf:/etc/resolv.conf:ro
 
 volumes:
   homecal-db-prod-data:
