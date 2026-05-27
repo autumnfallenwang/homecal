@@ -5,8 +5,17 @@ export interface LlmConfig {
   model: string;
 }
 
+// Parse a YYYY-MM-DD date as a local calendar date (avoids the UTC interpretation
+// `new Date("YYYY-MM-DD")` uses, which shifts the day-of-week in non-UTC TZ).
+// CI runs in UTC, our authoring TZ is Eastern — without this both produce
+// different weekdays for the same string.
+function dayOfWeekFromYMD(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "long" });
+}
+
 export function buildParsePrompt(today: string, memberNames: string[]): string {
-  const dayOfWeek = new Date(today).toLocaleDateString("en-US", { weekday: "long" });
+  const dayOfWeek = dayOfWeekFromYMD(today);
   const membersLine = memberNames.length > 0 ? `\nFamily members: ${memberNames.join(", ")}.` : "";
   return `You are a calendar event parser. Today is ${dayOfWeek}, ${today}.${membersLine}
 
@@ -116,7 +125,7 @@ export function parseLlmResponse(
 }
 
 export function buildImageParsePrompt(today: string, memberNames: string[]): string {
-  const dayOfWeek = new Date(today).toLocaleDateString("en-US", { weekday: "long" });
+  const dayOfWeek = dayOfWeekFromYMD(today);
   const membersLine = memberNames.length > 0 ? `\nFamily members: ${memberNames.join(", ")}.` : "";
   return `You are a calendar event parser. Today is ${dayOfWeek}, ${today}.${membersLine}
 

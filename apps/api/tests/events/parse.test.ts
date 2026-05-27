@@ -59,8 +59,12 @@ describe("buildParsePrompt", () => {
   });
 
   it("includes day of week", () => {
+    // 2026-03-09 is a Monday in the calendar date sense. The previous
+    // assertion ("Sunday") matched a TZ-shift bug — `new Date("2026-03-09")`
+    // parsed as UTC midnight → Sunday 8pm in Eastern. Fixed in llm.ts to
+    // parse the YYYY-MM-DD as a local calendar date.
     const prompt = buildParsePrompt("2026-03-09", []);
-    expect(prompt).toContain("Sunday");
+    expect(prompt).toContain("Monday");
   });
 
   it("includes JSON instruction", () => {

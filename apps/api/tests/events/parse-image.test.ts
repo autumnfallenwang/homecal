@@ -48,8 +48,10 @@ describe("buildImageParsePrompt", () => {
   });
 
   it("includes day of week", () => {
+    // 2026-04-06 is a Monday. Previous assertion ("Sunday") matched a TZ bug
+    // in buildImageParsePrompt — fixed alongside the parse.test.ts twin.
     const prompt = buildImageParsePrompt("2026-04-06", []);
-    expect(prompt).toContain("Sunday");
+    expect(prompt).toContain("Monday");
   });
 
   it("mentions image parsing", () => {

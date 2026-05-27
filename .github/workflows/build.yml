@@ -15,6 +15,13 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Unit tests don't actually connect to a DB, but `apps/api/src/db/index.ts`
+    # throws at module load if DATABASE_URL is unset. Locally vitest.config.ts
+    # loads apps/api/.env via dotenv; on CI there's no .env. Supply a dummy
+    # so the import chain resolves — the actual integration tests (which DO
+    # connect) are only invoked via `pnpm test`, not `test:fast`.
+    env:
+      DATABASE_URL: postgres://ci:ci@localhost:5432/ci
     steps:
       - uses: actions/checkout@v4
 
