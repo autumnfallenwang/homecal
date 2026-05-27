@@ -208,19 +208,119 @@ Holidays are a read-only layer backed by the `date-holidays` npm package (pure J
 | 82 | Kicker rendering in calendar views | ✅ Done | New `use-holidays.ts` hook (skips fetch on empty country list or missing range, sorts country key for stable re-fetch), new `use-preferences.ts` hook (GET on mount + PATCH helper, falls back silently so prefs failure never blocks the calendar), new `lib/holiday-utils.ts` with `holidayKey(date)` that uses local getFullYear/Month/Date (NOT toISOString — would TZ-shift), new `components/calendar/holiday-kicker.tsx` presentational (Fraunces italic lowercase, terracotta `·` prefix, `month` + `header` size variants). Wired into `day-cell` (absolute `pointer-events-none` kicker above the numeral so it doesn't eat click or pill budget), `week-grid` + `day-grid` headers (inline below the day name). `page.tsx` threads `usePreferences → useHolidays → {MonthGrid, WeekGrid, DayGrid}.holidays`. Also fixed an unrelated admin type-inference regression by refactoring the `.filter().map()` chain to an explicit for-loop. Kicker click → popover wiring deferred to task 83. Web build clean (10.5 kB admin / 42.1 kB home) |
 | 83 | Today view holiday line + settings UI | ✅ Done | Backend: new `GET /api/holidays/countries` + `listCountries()` service helper (sorted by name, cached for process lifetime) + OpenAPI path. Frontend: new `use-countries.ts` hook with module-level cache + in-flight dedup so the settings modal doesn't re-fetch 200 entries on every open. `page.tsx` computes a separate `holidayRange` for today view (today→today) so the kicker fires without a second endpoint call. `today-view.tsx` renders an italic `·  memorial day — observed in us` kicker between the weekday label and the massive date hero, hidden when scrolled. `calendar-header` settings modal gains a **Holidays** section: Fraunces italic label, country chips with per-chip `×` remove, `+ add country` popover with search-filter + scrollable list (top 50 matches). "Show observances too" checkbox wired to a disabled no-op per spec. Save path calls `setHolidayCountries` from `usePreferences`. Web build clean (43 kB home). Full API suite 36 files / 445 tests pass |
 
-## Phase 19: Future Enhancements (deferred)
+## Phase 19: k3s migration (web + API + DB, iOS deferred)
+
+Move HomeCal off the single-host docker-compose stack onto the home k3s cluster managed by `arch-infra` (Argo CD GitOps). Follows the playbook validated on llmgw (2026-05) and homenews (Phase 17). Web app + API + DB migrate; iOS is deliberately out-of-scope (LocalConfig.swift update is a separate follow-up after cutover). Full design + rationale + risks in [phase19-k3s-migration-memo.md](phase19-k3s-migration-memo.md).
+
+**Phase order (blocking dependencies):** A → B → C → D → E → F → R → G → H → I. A7 (schema drift audit) and A9 (LLM URL fix) are independent quick wins.
+
+### Phase A — Code touchups + logging hygiene + drizzle hygiene
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| — | iOS push via APNs | Not started | Enable when Apple Developer account is available |
-| — | Web Push notifications | Not started | Service Worker + Web Push API (add if users want desktop alerts) |
-| — | iOS voice input | Not started | Speech framework mic button → parse endpoint (requires physical device) |
-| — | Today view ambient widgets | Not started | Weather, chores/waiting-on, shopping list — fill the reserved glance-rail slot |
-| — | iOS Today view | Not started | Port Morning Paper layout to SwiftUI |
-| — | iOS Family page | Not started | Port portrait grid + drawer layout to SwiftUI |
-| — | Migrate web + iOS clients off legacy `/api/*` onto `/api/v1/*` | Not started | Follow-up once Phase 16 is proven |
-| — | Outbound webhooks | Not started | HomeCal publishes events to other home apps |
-| — | Holidays v2 | Not started | Observances, custom holidays, per-user opt-in, school/bank types |
+| 84 | A1: env-var surface audit | Not started | /health verified at app.ts:69; API_PORT verified at index.ts. Enumerate full env surface — authoritative input for B5/B6 |
+| 85 | A2: web SSR vs browser API URL split | Not started | `API_URL` for server-side fetches (Service DNS), `NEXT_PUBLIC_API_URL` for browser (Ingress). Homenews lesson — pod-to-pod must use Service DNS, only browser hits ingress |
+| 86 | A3: pino structured logger | Not started | New `apps/api/src/lib/logger.ts` mirroring homenews's contract. Strip `@homecal/` scope → service="homecal-api" |
+| 87 | A4: request-log middleware | Not started | Hono middleware emitting `{method, path, status, latency_ms, req_id}` JSON per request. Mount before route groups |
+| 88 | A5: replace 7 console.* sites with log.* | Not started | index.ts startup banner + reminder-scheduler.ts 6 sites. Web's 2 client-side console.error stay |
+| 89 | A6: LOG_LEVEL env plumbed through chart | Not started | Enables runtime bump via `kubectl set env deploy/homecal-api LOG_LEVEL=debug` |
+| 90 | A7: schema drift audit (blocking) | Not started | Running DB has no `__drizzle_migrations` table (created via push). Verify `apps/api/drizzle/0000-0004*.sql` reproduce the running schema; generate `0005_baseline.sql` if drift found |
+| 91 | A8: switch dev to drizzle-kit migrate | Not started | Root cause of historical orphaned-sessions/wiped-users mystery — push is destructive. Remove `db:push` from package.json scripts |
+| 92 | A9: fix broken LLM_GATEWAY_URL in env templates | Not started | Quick win independent of migration. `.env.example` + `deploy/.env.production.example` point to `localhost:51277` which is dead since llmgw moved to cluster. Update to `http://llmgw.arch.local` (dev) — unbreaks Smart Input today |
+
+### Phase B — Helm chart at `deploy/chart/`
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 93 | B1: scaffold Chart.yaml, _helpers.tpl, NOTES.txt | Not started | Mirror homenews's structure |
+| 94 | B2: db StatefulSet + headless Service + PVC | Not started | postgres:17-alpine (no pgvector — homecal doesn't use it), 5Gi PVC, headless Service, fsGroup 999. POSTGRES_PASSWORD=homecal_prod matches source. **securityContext placement**: pod-level for runAsNonRoot/runAs*/fsGroup, container-level for allowPrivilegeEscalation/capabilities (homenews gotcha 4) |
+| 95 | B3: api Deployment + Service + Ingress | Not started | Recreate strategy (reminder-scheduler singleton), 1 replica, /health probes, homecal-api.arch.local. securityContext placement per homenews gotcha 4 |
+| 96 | B4: web Deployment + Service + Ingress | Not started | RollingUpdate, 1 replica, GET / probe, homecal.arch.local |
+| 97 | B5: secrets via secretKeyRef | Not started | Unlike llmgw/homenews (LAN-trivial), homecal has real secrets — wire BETTER_AUTH_SECRET, EMAIL_PASSWORD, APNS_PRIVATE_KEY, POSTGRES_PASSWORD via valueFrom.secretKeyRef → homecal-secrets (created out-of-band in F1) |
+| 98 | B6: values.yaml | Not started | Three blocks (api/web/db) + plaintext env (URLs, model names, SMTP server). LLM_GATEWAY_URL=http://llmgw.llmgw, BETTER_AUTH_URL=http://homecal-api.arch.local, CORS_ORIGINS=http://homecal.arch.local |
+| 99 | B7: Helm pre-install migrate Job | Not started | Runs `drizzle-kit migrate` (NOT push). Hook weight -5, hook-delete-policy before-hook-creation,hook-succeeded |
+
+### Phase C — Dockerfile hardening
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 100 | C1: Dockerfile.api — add USER node | Not started | drizzle/ directory already copied for migrations |
+| 101 | C2: Dockerfile.web — add USER node on runtime stage | Not started | Verify NEXT_PUBLIC_API_URL + NEXT_PUBLIC_AUTH_URL build-args wire through |
+
+### Phase D — CI/CD
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 102 | D1: .github/workflows/build.yml | Not started | Three jobs (test, build-and-deploy matrix [api,web], bump-arch-infra). `git clone https://x-access-token:${GH_TOKEN}@...` URL form (homenews gotcha 2), `yq` not `sed` (gotcha 3), concurrency group serialized. Web gets two build-args (NEXT_PUBLIC_API_URL + NEXT_PUBLIC_AUTH_URL) |
+| 103 | D2: User-action — GitHub repo setup | Not started | Add ARCH_INFRA_TOKEN PAT to repo secrets. After first GHA build, flip both ghcr.io/autumnfallenwang/homecal-{api,web} packages to public |
+| 104 | D3: .github/dependabot.yml | Not started | Mirror homenews — weekly PRs for npm + docker + github-actions |
+
+### Phase E — arch-infra registration
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 105 | E1: apps/homecal.yaml in arch-infra | Not started | **ORDERING CONSTRAINT**: commit ONLY after D2 completes (first build green + GHCR public) — otherwise first sync ImagePullBackOffs. Loki retention rule for `homecal` namespace already exists in arch-infra |
+
+### Phase F — Secrets in cluster
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 106 | F1: create homecal-secrets (out-of-band) | Not started | kubectl create namespace homecal && kubectl create secret generic homecal-secrets --from-env-file=... (file not committed). Sealed Secrets deferred to follow-up |
+
+### Phase R — Runbook
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 107 | R1: docs/k3s-migration-runbook.md | Not started | Written right before G: pre-cutover checklist, ordered G/H commands, rollback procedure (docker compose up restores compose; cluster DB wipe + re-restore from dump). Declare out-of-scope: Sealed Secrets, dashboards, HPA, backups, CLI deprecation, APNs E2E |
+
+### Phase G — Data migration
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 108 | G1: source DB pre-flight | Not started | Record real row counts (users=4, events=124, event_assignees=353, event_logs=266, event_reminders=142, series=4, sessions=9, accounts=4). Dry-run dump |
+| 109 | G2: quiesce source | Not started | `docker stop homecal-api homecal-web` (DB stays up). Confirm no active queries |
+| 110 | G3: final pg_dump + integrity check | Not started | -Fc custom format. `pg_restore --list` verification. Keep dump for 7-day rollback window |
+| 111 | G4: cluster DB pre-flight + clean target | Not started | initdb auto-created homecal_prod; drop+recreate for clean restore target |
+| 112 | G5: pg_restore into cluster pod | Not started | `--no-owner --no-acl` flags. Expect harmless ACL skip "errors" |
+| 113 | G6: verify row counts match source | Not started | All 11 tables. STOP if any mismatch |
+| 114 | G7: bootstrap __drizzle_migrations table | Not started | Source has no migrations table. INSERT one row per existing migration file with hashes from drizzle/meta/_journal.json so future migrate-Job runs don't re-apply |
+| 115 | G8: align passwords post-restore | Not started | pg_dump doesn't carry role passwords (homenews lesson). Verify cluster homecal user password matches; ALTER USER if not. Mitigated upfront if B2's POSTGRES_PASSWORD=homecal_prod matches source |
+
+### Phase H — Cutover
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 116 | H1: DNS pre-flight | Not started | homecal.arch.local + homecal-api.arch.local resolve on workstation. /etc/hosts or router DNS |
+| 117 | H2: cluster pre-flight | Not started | Pods Running, ingress 200, Argo CD Synced+Healthy |
+| 118 | H3: stop docker-compose DB | Not started | `docker stop homecal-db-prod`. iOS breaks here (out-of-scope) |
+| 119 | H4: smoke test — auth + events + holidays | Not started | Sign in as Aaron, calendar shows existing events (~124), assignees+reminders+holidays render, create/edit/delete works. Cookie domain change → re-login expected |
+| 120 | H5: reminder pipeline (email) | Not started | Email path only — APNs E2E deferred with iOS |
+| 121 | H6: Loki structured-query verification | Not started | `{namespace="homecal"} \| json \| level="info"` shows request-log entries with req_id |
+| 122 | H7: rate limiter + 4xx logging | Not started | Rapid-fire /api/v1/users → 429s appear in Loki with status:429 |
+| 123 | H8: Smart Input → llmgw connectivity | Not started | kubectl exec reaches `http://llmgw.llmgw`, browser-driven Quick Add → parse → event pre-fill works |
+
+### Phase I — Cleanup
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 124 | I1: decommission docker artifacts | Not started | After 7-day stable window: rm deploy/compose.yaml + deploy/homecal CLI. Update CLAUDE.md (Production: docker → k3s). Update progress.md |
+
+## Backlog (deferred)
+
+| Item | Notes |
+|---|---|
+| iOS LocalConfig.swift update post-cutover | Update iOS client to hit homecal-api.arch.local; requires LAN DNS resolution on device. Follow-up to Phase 19 |
+| Sealed Secrets bootstrap | Encrypt secrets at rest in arch-infra. No-downtime swap once operator is installed cluster-wide |
+| iOS push via APNs | Enable when Apple Developer account is available |
+| Web Push notifications | Service Worker + Web Push API (add if users want desktop alerts) |
+| iOS voice input | Speech framework mic button → parse endpoint (requires physical device) |
+| Today view ambient widgets | Weather, chores/waiting-on, shopping list — fill the reserved glance-rail slot |
+| iOS Today view | Port Morning Paper layout to SwiftUI |
+| iOS Family page | Port portrait grid + drawer layout to SwiftUI |
+| Migrate web + iOS clients off legacy `/api/*` onto `/api/v1/*` | Follow-up once Phase 16 is proven |
+| Outbound webhooks | HomeCal publishes events to other home apps |
+| Holidays v2 | Observances, custom holidays, per-user opt-in, school/bank types |
+| Public API ergonomics | Filter params on list endpoints, resource-per-user views, bulk endpoints, typed client generation sanity check (was Phase 20 placeholder) |
 
 ## What's Working
 
@@ -256,7 +356,11 @@ Holidays are a read-only layer backed by the `date-holidays` npm package (pure J
 
 ## What's Next
 
-Phase 17 shipped to prod. Phase 18 complete (tasks 80–83) — holidays service + per-user country preference + kickers across all views + settings UI. Browser verification pending. Next phase: 19 (deferred enhancements) or 20 (public API ergonomics placeholder).
+Phase 18 complete (tasks 80–83) — holidays service + per-user country preference + kickers + settings UI shipped.
+
+**Phase 19 (k3s migration, tasks 84–124)** is the next active phase. Migrates web + API + DB off docker-compose onto the home k3s cluster (managed by `arch-infra` via Argo CD GitOps). Mirrors llmgw + homenews playbook. iOS deliberately out-of-scope — LocalConfig.swift update is a separate follow-up after cutover. Full design in [phase19-k3s-migration-memo.md](phase19-k3s-migration-memo.md).
+
+Recommended start order: A7 (schema drift audit — blocking) → A9 (LLM URL fix — quick win) → A1 (env audit) → A3–A6 (logging refactor) → A8 (drizzle push→migrate) → A2 (web URL split) → B → C → D → E → F → R → G → H → I.
 
 ## Reference Docs
 

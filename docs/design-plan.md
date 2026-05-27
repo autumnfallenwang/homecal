@@ -465,6 +465,43 @@ Why not a ribbon/pill: too AI-default. Italic kicker + terracotta dot is typogra
 
 83. Today view holiday line + settings UI — `today-view.tsx` renders an italic kicker (`"memorial day — observed in us"`) between the weekday label and the massive date hero, only when `today` is a holiday. Count is unaffected — holidays never appear in "N events today". In the `calendar-header` settings modal, add a new **Holidays** section: Fraunces italic label, a multi-select of country codes with a small searchable list sourced from `date-holidays`'s `getCountries()` (about 200 entries, lazy-loaded), default pulled from locale. Save goes through the task-81 PATCH endpoint. Also flag a "Show observances too" checkbox but keep it wired to a no-op for v1 (future-proofing without shipping the feature). Browser verification at 1440/1024/768/390px on a known holiday date.
 
+### Phase 19 — k3s migration (web + API + DB, iOS deferred)
+
+Move HomeCal off the single-host `docker compose` stack onto the home k3s cluster managed by `arch-infra` (Argo CD GitOps). Follows the playbook validated on llmgw (2026-05) and homenews (Phase 17). **Scope: web + API + DB only.** iOS app deliberately left to break post-cutover — `LocalConfig.swift` update is a separate follow-up once `*.arch.local` DNS resolves on the device.
+
+**Why now**:
+- HomeCal is the last app on docker-compose-on-host; llmgw + homenews already migrated.
+- `LLM_GATEWAY_URL=http://localhost:51277` is already broken (llmgw moved to cluster). Smart Input has been silently failing in prod. Fix requires pointing at `llmgw.llmgw` cluster Service DNS — easiest done as part of this migration.
+- Loki retention rule for `homecal` namespace already pre-provisioned in arch-infra (30-day retention) — dormant until HomeCal lands.
+
+**Cluster shape** (target):
+```
+namespace: homecal
+├── statefulset/homecal-db        postgres:17-alpine (1 replica, Recreate, fsGroup 999, 5Gi PVC)
+├── deployment/homecal-api        ghcr.io/autumnfallenwang/homecal-api:<sha> (1 replica, Recreate)
+├── deployment/homecal-web        ghcr.io/autumnfallenwang/homecal-web:<sha> (1 replica, RollingUpdate)
+├── job/homecal-migrate           Helm pre-install/pre-upgrade hook, drizzle-kit migrate
+├── secret/homecal-secrets        BETTER_AUTH_SECRET, EMAIL_PASSWORD, APNS_PRIVATE_KEY, POSTGRES_PASSWORD (manual)
+├── service/homecal-{db,api,web}  ClusterIP (db is headless)
+├── ingress/homecal-web           Traefik, host homecal.arch.local
+└── ingress/homecal-api           Traefik, host homecal-api.arch.local
+```
+
+**Key decisions** (locked):
+- **Two ingresses, not path-based routing** — mirrors llmgw/homenews; avoids CORS/rewrite issues with Better Auth's `/api/auth/*`.
+- **API uses Recreate** because reminder-scheduler is a `setInterval` singleton — two replicas would double-fire reminders. Same constraint as homenews's pipeline scheduler.
+- **postgres:17-alpine, NOT pgvector** — homecal doesn't use embeddings, so the smaller image suffices.
+- **Plaintext k8s Secret for cutover, Sealed Secrets later** — unlike llmgw/homenews (LAN-trivial passwords), HomeCal has real secrets. Sealed Secrets bootstrap is a separate follow-up to avoid doubling the cutover surface area.
+- **`drizzle-kit migrate` going forward, not `push`** — push was the root cause of the historical orphaned-sessions/wiped-users mystery in the prod DB. Switch dev workflow and adopt a Helm pre-install Job for the cluster.
+- **Adopt pino + request-log middleware** — homenews's logger contract was explicitly designed to be portable to homecal. Without it, Loki queries can only regex; with it, `{namespace="homecal", service="homecal-api"} | json | level="error"` works day one.
+- **Preserve DB name `homecal_prod` and password `homecal_prod`** — keeps the pg_dump/restore trivial; rename is a separate follow-up if ever needed.
+- **`BETTER_AUTH_URL=http://homecal-api.arch.local`** — Better Auth's `/api/auth/*` lives on the API host.
+- **iOS out-of-scope** — accept the break, update `LocalConfig.swift` later.
+
+**Full plan**: see [phase19-k3s-migration-memo.md](phase19-k3s-migration-memo.md) for the 41-task breakdown (84–124) across phases A (code touchups + logging), B (Helm chart), C (Dockerfiles), D (CI), E (arch-infra registration), F (secrets), R (runbook), G (data migration), H (cutover), I (cleanup). Also includes the cross-namespace Service DNS map, securityContext placement rules (pod-level vs container-level), and the post-restore `__drizzle_migrations` bootstrap (since the source DB never had a migrations table).
+
+**Out of scope (deliberately, mirrored from homenews phase17 memo)**: Sealed Secrets install, Grafana dashboards for homecal, HPA/multi-replica, PVC backups, iOS LocalConfig.swift update, APNs E2E push test (requires iOS device on new URL), `homecal` CLI deprecation (retain for 7-day rollback window).
+
 ### Phase 20 — Public API ergonomics for external apps (placeholder)
 
 **Motivation**: Phase 16 opened HomeCal to machine callers (apiKey plugin, rate limit, `/api/v1`, OpenAPI spec) and Phase 17 built the management UI. Actually *using* the API as an external service still has sharp edges — e.g., "give me all events for user X" today requires `GET /users` then `GET /events?from=...&to=...` then a client-side filter on `assignees[]`, with a privacy-model caveat that a non-admin key can't see other users' private events at all.
@@ -481,7 +518,9 @@ Why not a ribbon/pill: too AI-default. Italic kicker + terracotta dot is typogra
 
 **Deliverables** (TBD — tasks numbered when this phase is planned for real): a set of small focused PRs, each with tests + OpenAPI spec updates in the same commit.
 
-### Phase 19 — Future Enhancements (deferred)
+### Backlog — Future Enhancements (deferred)
+- iOS LocalConfig.swift update post Phase-19 cutover — point at homecal-api.arch.local; requires LAN DNS resolution on device
+- Sealed Secrets bootstrap — encrypt secrets at rest in arch-infra (no-downtime env source swap once operator is installed)
 - iOS push via APNs — enable when Apple Developer account is available
 - Web Push notifications — Service Worker + Web Push API (add if users want desktop alerts)
 - iOS voice input — Speech framework mic button → parse endpoint (requires physical device)
