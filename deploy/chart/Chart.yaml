@@ -1,0 +1,8 @@
+apiVersion: v2
+name: homecal
+description: Family calendar — api + web + Postgres
+type: application
+version: 0.1.0
+# appVersion is HomeCal-as-a-product, not any one component. Bump manually on
+# semver-significant releases; Dependabot does not touch this field.
+appVersion: "0.1.0"

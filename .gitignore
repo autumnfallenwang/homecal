@@ -71,6 +71,11 @@ web_modules/
 !.env.example
 !.env.production.example
 
+# Cluster Secret values (Phase 19 — fed to homecal-secrets via
+# scripts/create-cluster-secret.sh). Template is committed.
+cluster-secrets.env
+!cluster-secrets.env.example
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache

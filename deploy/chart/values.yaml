@@ -1,0 +1,183 @@
+# Default values for the homecal chart.
+# Override via `helm install --set` or the ArgoCD Application's
+# spec.source.helm.parameters in arch-infra/apps/homecal.yaml.
+#
+# Chart shape: three components (api, web, db) + a pre-install migrate Job,
+# all in one release. Helper templates take a (dict "context" . "component" "X")
+# argument so each workload gets its own labels + selectors.
+
+# Real secrets (DATABASE_URL, BETTER_AUTH_SECRET, EMAIL_PASSWORD, APNS_PRIVATE_KEY,
+# POSTGRES_PASSWORD) live in this Secret, created out-of-band before deploy:
+#   kubectl create namespace homecal
+#   kubectl create secret generic homecal-secrets -n homecal --from-env-file=./secrets.env
+# Move to Sealed Secrets later as a no-downtime env-source swap.
+secrets:
+  name: homecal-secrets
+
+api:
+  image:
+    repository: ghcr.io/autumnfallenwang/homecal-api
+    # CI bumps `tag` to a commit SHA in the ArgoCD Application's parameters
+    # (`api.image.tag`). Web bumps in the same commit (`web.image.tag`) so
+    # api + web roll together — the web build embeds NEXT_PUBLIC_AUTH_URL
+    # at build time and the API contract evolves in lockstep.
+    tag: latest
+    pullPolicy: IfNotPresent
+  # Reminder scheduler is a setInterval singleton inside the API process; do not scale.
+  replicaCount: 1
+  service:
+    port: 80
+    targetPort: 52001
+  ingress:
+    enabled: true
+    className: traefik
+    host: homecal-api.arch.local
+  # Plaintext config. Secrets (DATABASE_URL, BETTER_AUTH_SECRET, EMAIL_PASSWORD,
+  # APNS_PRIVATE_KEY) are wired via secretKeyRef in deployment-api.yaml.
+  env:
+    API_PORT: "52001"
+    BETTER_AUTH_URL: http://homecal-api.arch.local
+    CORS_ORIGINS: http://homecal.arch.local
+    LOG_LEVEL: info
+    # In-cluster Service DNS for llmgw (cross-namespace; llmgw lives in `llmgw` ns).
+    LLM_GATEWAY_URL: http://llmgw.llmgw
+    LLM_MODEL: claude-haiku-4-5
+    LLM_FALLBACK_MODEL: gemma3:27b
+    EMAIL_FROM: ""
+    EMAIL_SMTP_SERVER: smtp.gmail.com
+    EMAIL_SMTP_PORT: "587"
+    APNS_KEY_ID: ""
+    APNS_TEAM_ID: ""
+    APNS_BUNDLE_ID: ""
+    APNS_PRODUCTION: "false"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  probes:
+    liveness:
+      httpGet:
+        path: /health
+        port: 52001
+      initialDelaySeconds: 10
+      periodSeconds: 30
+    readiness:
+      httpGet:
+        path: /health
+        port: 52001
+      initialDelaySeconds: 3
+      periodSeconds: 10
+
+web:
+  image:
+    repository: ghcr.io/autumnfallenwang/homecal-web
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    port: 80
+    targetPort: 52000
+  ingress:
+    enabled: true
+    className: traefik
+    host: homecal.arch.local
+  env:
+    PORT: "52000"
+    HOSTNAME: "0.0.0.0"
+    # API_URL is the runtime override for Next.js's rewrite proxy — points at
+    # the in-cluster API Service DNS so SSR/route-handler fetches never leave
+    # the pod network (homenews lesson: pod-to-pod uses Service DNS, only
+    # browsers hit ingress hostnames).
+    API_URL: http://homecal-api
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  probes:
+    liveness:
+      httpGet:
+        path: /
+        port: 52000
+      initialDelaySeconds: 10
+      periodSeconds: 30
+    readiness:
+      httpGet:
+        path: /
+        port: 52000
+      initialDelaySeconds: 3
+      periodSeconds: 10
+
+db:
+  # Plain postgres:17-alpine — homecal doesn't use pgvector/pg_trgm extensions
+  # (verified via A7 schema audit). Matches the source compose container.
+  image:
+    repository: postgres
+    tag: 17-alpine
+    pullPolicy: IfNotPresent
+  service:
+    port: 5432
+    targetPort: 5432
+  persistence:
+    # Live source volume is ~63MB. 5Gi is ~80× headroom; local-path costs
+    # nothing until used.
+    size: 5Gi
+    storageClass: local-path
+    mountPath: /var/lib/postgresql/data
+  env:
+    # initdb honors POSTGRES_DB + POSTGRES_USER only on an empty PGDATA.
+    # `homecal_prod` matches the source compose name so pg_restore lands cleanly.
+    POSTGRES_DB: homecal_prod
+    POSTGRES_USER: homecal
+    # POSTGRES_PASSWORD comes from the homecal-secrets Secret (set to the
+    # source compose password so post-restore auth Just Works — see G8 task).
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  # Postgres image runs as UID/GID 999 (not the shared 1000). fsGroup 999 lets
+  # the postgres user write to the PVC. The shared containerSecurityContext
+  # still applies — its fields are container-level only and k8s drops them
+  # silently at pod scope (homenews gotcha #4), so they don't belong here.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+
+# Migrate Job — Helm pre-install/pre-upgrade hook running drizzle-kit migrate.
+# Uses the same api image (apps/api/drizzle/*.sql files are baked in).
+migrate:
+  # Default to disabled until F1 secret is created. Enable via ArgoCD parameter
+  # OR helm --set migrate.enabled=true once the secret exists. Skipping the Job
+  # is safe when the schema already matches (e.g. post-restore + G7 bootstrap).
+  enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+# Pod- and container-level security contexts. api + web run as node UID 1000;
+# the DB pod runs as postgres UID 999 and overrides these in its template.
+# Per homenews gotcha #4: allowPrivilegeEscalation / readOnlyRootFilesystem /
+# capabilities are container-level only — k8s silently drops them if placed on
+# the pod. Don't move them.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL

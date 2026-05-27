@@ -18,8 +18,13 @@ COPY apps/web/ apps/web/
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Build Next.js with standalone output
-# NEXT_PUBLIC_* vars are baked in at build time
+# Build Next.js with standalone output.
+# NEXT_PUBLIC_* vars are inlined into the client bundle at build time. The
+# GHA workflow passes --build-arg for both:
+#   NEXT_PUBLIC_API_URL=http://homecal-api.arch.local  (rewrite proxy fallback)
+#   NEXT_PUBLIC_AUTH_URL=http://homecal-api.arch.local (Better Auth client baseURL)
+# Runtime-overrideable API_URL (not NEXT_PUBLIC_*) is set in the chart env so
+# the SSR rewrite proxy uses cluster Service DNS — see next.config.ts.
 ARG NEXT_PUBLIC_API_URL=http://localhost:51001
 ARG NEXT_PUBLIC_AUTH_URL=http://localhost:51000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
@@ -31,14 +36,19 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Copy standalone output
-COPY --from=builder /app/apps/web/.next/standalone ./
-COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder /app/apps/web/public ./apps/web/public
+# Copy standalone output. Chown to node:node so the non-root USER below can
+# read it. Next.js writes to .next/cache at runtime, so we don't enable
+# readOnlyRootFilesystem in the chart.
+COPY --from=builder --chown=node:node /app/apps/web/.next/standalone ./
+COPY --from=builder --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder --chown=node:node /app/apps/web/public ./apps/web/public
 
-EXPOSE 51000
+USER node
 
-ENV PORT=51000
+# Container port. Service targetPort + chart probes match this.
+EXPOSE 52000
+
+ENV PORT=52000
 ENV HOSTNAME=0.0.0.0
 
 CMD ["node", "apps/web/server.js"]

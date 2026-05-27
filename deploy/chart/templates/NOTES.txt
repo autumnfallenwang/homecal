@@ -1,0 +1,31 @@
+homecal release {{ .Release.Name }} (chart {{ .Chart.Version }}, app {{ .Chart.AppVersion }}) deployed.
+
+Reach the apps:
+  Web:  curl http://{{ .Values.web.ingress.host }}/
+  API:  curl http://{{ .Values.api.ingress.host }}/health
+
+Tail logs:
+  kubectl logs -n {{ .Release.Namespace }} deploy/homecal-api -f
+  kubectl logs -n {{ .Release.Namespace }} deploy/homecal-web -f
+  kubectl logs -n {{ .Release.Namespace }} statefulset/homecal-db -f
+
+Loki history (30d retention for {namespace="homecal"}):
+  curl -sG http://loki.arch.local/loki/api/v1/query_range \
+    --data-urlencode 'query={namespace="{{ .Release.Namespace }}"} | json | event="http.request"' \
+    --data-urlencode "start=$(date -u -d '-30 min' +%s)000000000" \
+    --data-urlencode "end=$(date -u +%s)000000000"
+
+Ops notes:
+  - api: single replica + Recreate strategy. The reminder scheduler is a setInterval
+    singleton inside the API process; two replicas would double-fire email + APNs
+    reminders.
+  - db: single-replica StatefulSet with a ReadWriteOnce PVC ({{ .Values.db.persistence.size }} local-path).
+    Backups today have the same parity as the legacy docker volume (none) — revisit
+    when it bites.
+  - llmgw: reached via in-cluster Service DNS at LLM_GATEWAY_URL=http://llmgw.llmgw.
+    No more host-network workaround.
+  - Real secrets (BETTER_AUTH_SECRET, EMAIL_PASSWORD, APNS_PRIVATE_KEY, POSTGRES_PASSWORD)
+    live in the homecal-secrets Secret, created out-of-band (NOT committed). Swap to
+    Sealed Secrets later as a no-downtime env-source change.
+  - Schema migrations run via a Helm pre-install/pre-upgrade Job using drizzle-kit
+    migrate against the SQL files in apps/api/drizzle/.

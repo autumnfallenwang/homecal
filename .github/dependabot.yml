@@ -1,0 +1,46 @@
+version: 2
+updates:
+  # npm — keep API + web dependency trees current. Grouped where bumps cluster.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      hono:
+        patterns:
+          - "hono"
+          - "@hono/*"
+          - "hono-rate-limiter"
+      better-auth:
+        patterns:
+          - "better-auth"
+      drizzle:
+        patterns:
+          - "drizzle-orm"
+          - "drizzle-kit"
+      next:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+      pino:
+        patterns:
+          - "pino"
+          - "pino-pretty"
+
+  # Docker base images (node:22-alpine + postgres:17-alpine — security backports,
+  # eventually node:24).
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      interval: weekly
+      day: monday
+
+  # GHA actions (checkout / setup-node / docker-* / pnpm/action-setup —
+  # drift starts forcing Node 24 on 2026-06-02; bumps will surface before then).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday

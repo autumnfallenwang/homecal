@@ -12,17 +12,23 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/shared/src/ packages/shared/src/
 COPY packages/shared/tsconfig.json packages/shared/
 
-# Copy API package
+# Copy API package — including drizzle/ migrations (used by the Helm pre-install
+# Job + by `pnpm db:migrate` on local dev).
 COPY apps/api/package.json apps/api/
 COPY apps/api/src/ apps/api/src/
 COPY apps/api/tsconfig.json apps/api/
 COPY apps/api/drizzle.config.ts apps/api/
 COPY apps/api/drizzle/ apps/api/drizzle/
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install dependencies, then hand ownership to the `node` user (UID 1000) so
+# the non-root runtime can read everything. Without chown, USER node fails on
+# any path needing read access during runtime.
+RUN pnpm install --frozen-lockfile && chown -R node:node /app
 
-# Expose port (overridden by API_PORT env var)
-EXPOSE 51001
+USER node
+
+# Container port. The chart maps Service targetPort here; the actual listen
+# port inside the process comes from API_PORT env (defaulted to 52001 in k3s).
+EXPOSE 52001
 
 CMD ["pnpm", "--filter", "@homecal/api", "start"]
