@@ -63,7 +63,7 @@ Prod ports: Web 51000, API 51001, DB 51432. Config in `deploy/.env.production` (
 - **Dev**: feature branches, `pnpm dev`, dev DB on port 5432, hot reload
 - **Prod**: main branch, Docker containers, prod DB on port 51432, isolated data
 - **Deploy**: merge to main → `homecal update` (pulls + builds + migrates + restarts)
-- **Migrations**: schema-only (additive) — never delete/rename columns
+- **Migrations**: SQL files in `apps/api/drizzle/`, applied via `pnpm --filter @homecal/api db:migrate`. Generate new ones with `db:generate` after editing `db/schema.ts`. Additive-only — never delete/rename columns. Do NOT use `drizzle-kit push` — it's destructive and doesn't track applied migrations (deprecated in Phase 19)
 
 ## Docs
 

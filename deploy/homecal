@@ -50,7 +50,7 @@ case "${1:-help}" in
 
     echo "==> Running database migrations..."
     sleep 2
-    docker exec homecal-api pnpm --filter @homecal/api exec drizzle-kit push
+    docker exec homecal-api pnpm --filter @homecal/api exec drizzle-kit migrate
 
     echo ""
     echo "homecal v$VERSION updated and running"

@@ -160,7 +160,7 @@ Dev runs locally with hot reload, separate from prod.
 
 ### Dev/Prod Isolation
 - **Databases**: Completely separate — dev on port 5432, prod on port 51432. Different data, same schema.
-- **Migrations**: Schema-only (`drizzle-kit push`) — adds tables/columns, never touches data.
+- **Migrations**: SQL files in `apps/api/drizzle/` applied via `pnpm db:migrate` (uses `drizzle-kit migrate`). Additive-only — adds tables/columns, never touches data. The legacy `drizzle-kit push` workflow was deprecated in Phase 19 — `push` doesn't track applied migrations and silently dropped users in prod historically.
 - **Ports**: No conflicts — dev (3000/3001/5432) and prod (51000/51001/51432) can run simultaneously.
 
 ## iOS Development Workflow

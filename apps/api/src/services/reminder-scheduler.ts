@@ -1,6 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { deviceTokens, eventAssignees, eventReminders, events, users } from "../db/schema.js";
+import { log } from "../lib/logger.js";
 import { type ApnsConfig, getApnsConfig, type PushPayload, sendPush } from "./apns.js";
 import { type EmailConfig, getEmailConfig, sendReminderEmail } from "./email.js";
 
@@ -94,7 +95,10 @@ export async function checkDueReminders(fns?: DispatchFns): Promise<number> {
 
       for (const user of assigneeUsers) {
         if (!emailConfig && !fns?.emailFn) {
-          console.warn("[reminder-scheduler] Email not configured, skipping");
+          log.warn(
+            { event: "reminder.dispatch.email_skipped", reason: "email_not_configured" },
+            "email not configured, skipping reminder",
+          );
           deliveryOk = false;
           continue;
         }
@@ -105,9 +109,23 @@ export async function checkDueReminders(fns?: DispatchFns): Promise<number> {
           `Reminder: ${reminder.eventTitle}`,
           `${reminder.eventTitle} — ${bodyText}`,
         );
-        if (!result.success) {
-          console.error(
-            `[reminder-scheduler] email send failed: reminder=${reminder.reminderId} to=${user.email} err=${result.error}`,
+        if (result.success) {
+          log.info(
+            {
+              event: "reminder.dispatch.email",
+              reminder_id: reminder.reminderId,
+              event_id: reminder.eventId,
+            },
+            "email reminder dispatched",
+          );
+        } else {
+          log.error(
+            {
+              event: "reminder.dispatch.email_fail",
+              reminder_id: reminder.reminderId,
+              err: result.error,
+            },
+            "email send failed",
           );
           deliveryOk = false;
         }
@@ -134,7 +152,10 @@ export async function checkDueReminders(fns?: DispatchFns): Promise<number> {
 
       for (const device of tokens) {
         if (!apnsConfig && !fns?.pushFn) {
-          console.warn("[reminder-scheduler] APNs not configured, skipping push");
+          log.warn(
+            { event: "reminder.dispatch.push_skipped", reason: "apns_not_configured" },
+            "APNs not configured, skipping push reminder",
+          );
           continue;
         }
         const config = apnsConfig as ApnsConfig;
@@ -145,6 +166,23 @@ export async function checkDueReminders(fns?: DispatchFns): Promise<number> {
           (result.reason === "BadDeviceToken" || result.reason === "Unregistered")
         ) {
           await db.delete(deviceTokens).where(eq(deviceTokens.id, device.id));
+          log.info(
+            {
+              event: "device_token.purge",
+              token_id: device.id,
+              reason: result.reason,
+            },
+            "purged stale device token",
+          );
+        } else if (result.success) {
+          log.info(
+            {
+              event: "reminder.dispatch.push",
+              reminder_id: reminder.reminderId,
+              event_id: reminder.eventId,
+            },
+            "push reminder dispatched",
+          );
         }
       }
     }
@@ -163,12 +201,19 @@ export async function checkDueReminders(fns?: DispatchFns): Promise<number> {
 }
 
 export function startReminderScheduler(intervalMs = 60000): NodeJS.Timeout {
-  console.info(`[reminder-scheduler] started (interval: ${intervalMs}ms)`);
+  log.info(
+    { event: "reminder.scheduler.start", interval_ms: intervalMs },
+    "reminder scheduler started",
+  );
 
   // Run immediately on start
-  checkDueReminders().catch((err) => console.error("[reminder-scheduler] error:", err));
+  checkDueReminders().catch((err) =>
+    log.error({ event: "reminder.scheduler.error", err }, "reminder scheduler tick failed"),
+  );
 
   return setInterval(() => {
-    checkDueReminders().catch((err) => console.error("[reminder-scheduler] error:", err));
+    checkDueReminders().catch((err) =>
+      log.error({ event: "reminder.scheduler.error", err }, "reminder scheduler tick failed"),
+    );
   }, intervalMs);
 }

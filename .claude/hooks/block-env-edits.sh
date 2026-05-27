@@ -10,9 +10,10 @@
 
 FILE=$(jq -r '.tool_input.file_path // empty')
 
-# Allow: .env.example template (no real secrets, by convention).
+# Allow: any *.example template (no real secrets, by convention).
+# Matches .env.example, .env.production.example, .env.local.example, etc.
 case "$FILE" in
-  *.env.example|*.env.example.*)
+  *.example)
     exit 0
     ;;
 esac

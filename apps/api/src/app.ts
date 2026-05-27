@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { auth } from "./auth.js";
 import { requireAuth } from "./middleware/auth.js";
 import { adminRateLimiter, apiRateLimiter } from "./middleware/rate-limit.js";
+import { requestLog } from "./middleware/request-log.js";
 import { getOpenApiSpec } from "./openapi/spec.js";
 import { swaggerUiHtml } from "./openapi/swagger-ui.html.js";
 import { adminApp } from "./routes/admin.js";
@@ -26,6 +27,11 @@ app.use(
     credentials: true,
   }),
 );
+
+// Per-request access log — one `event: "http.request"` JSON line per request,
+// with req_id stashed for route handlers to correlate via c.get("req_id").
+// Mounted before rate-limit so 429s still get logged with their status.
+app.use("*", requestLog);
 
 // Per-caller rate limiting on `/api/*` (admin routes get a higher quota).
 // Skipped during integration tests so the in-memory store doesn't bleed
