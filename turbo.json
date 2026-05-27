@@ -10,9 +10,12 @@
       "outputs": [".next/**", "dist/**"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "env": ["DATABASE_URL", "NODE_ENV"]
     },
-    "test:fast": {},
+    "test:fast": {
+      "env": ["DATABASE_URL", "NODE_ENV"]
+    },
     "lint": {},
     "lint:fix": {}
   }
