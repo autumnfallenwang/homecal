@@ -84,6 +84,7 @@ jobs:
           build-args: |
             ${{ matrix.component == 'web' && 'NEXT_PUBLIC_API_URL=http://homecal-api.arch.local' || '' }}
             ${{ matrix.component == 'web' && 'NEXT_PUBLIC_AUTH_URL=http://homecal-api.arch.local' || '' }}
+            ${{ matrix.component == 'web' && 'API_URL=http://homecal-api' || '' }}
           # Separate cache scopes — api and web have unrelated dep trees,
           # sharing one cache would thrash constantly.
           cache-from: type=gha,scope=${{ matrix.component }}

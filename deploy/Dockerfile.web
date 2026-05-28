@@ -27,8 +27,13 @@ RUN pnpm install --frozen-lockfile
 # the SSR rewrite proxy uses cluster Service DNS — see next.config.ts.
 ARG NEXT_PUBLIC_API_URL=http://localhost:51001
 ARG NEXT_PUBLIC_AUTH_URL=http://localhost:51000
+ARG API_URL=http://localhost:51001
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_AUTH_URL=$NEXT_PUBLIC_AUTH_URL
+# API_URL is BAKED into the rewrite at build time (Next.js evaluates
+# next.config.ts during `next build`, not at server start). Runtime API_URL
+# env var is ignored by the rewrite map — see /app/.next/routes-manifest.json.
+ENV API_URL=$API_URL
 RUN pnpm --filter @homecal/web build
 
 # --- Production stage ---
