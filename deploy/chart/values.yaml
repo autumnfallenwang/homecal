@@ -43,7 +43,9 @@ api:
     LLM_GATEWAY_URL: http://llmgw.llmgw
     LLM_MODEL: claude-haiku-4-5
     LLM_FALLBACK_MODEL: gemma3:27b
-    EMAIL_FROM: ""
+    # EMAIL_FROM lives in homecal-secrets (loaded via secretKeyRef in
+    # deployment-api.yaml) so the family member's email address stays out of
+    # the publicly-committed chart.
     EMAIL_SMTP_SERVER: smtp.gmail.com
     EMAIL_SMTP_PORT: "587"
     APNS_KEY_ID: ""

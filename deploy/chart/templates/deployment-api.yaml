@@ -49,6 +49,12 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.secrets.name }}
                   key: BETTER_AUTH_SECRET
+            - name: EMAIL_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.name }}
+                  key: EMAIL_FROM
+                  optional: true
             - name: EMAIL_PASSWORD
               valueFrom:
                 secretKeyRef:
