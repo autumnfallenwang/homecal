@@ -306,7 +306,7 @@ Cutover completed 2026-05-27. HomeCal moved off the single-host docker-compose s
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 124 | I1: decommission docker artifacts | Pending — hold 7-day window | After 2026-06-03: rm deploy/compose.yaml + deploy/homecal CLI + /tmp/homecal-cutover-*.dump. Keep deploy/Dockerfile.* (used by GHA). Update CLAUDE.md (Production: docker → k3s) and progress.md |
+| 124 | I1: decommission docker artifacts | ✅ Done | Removed deploy/compose.yaml + deploy/homecal CLI; removed 4 stopped containers + the `deploy_homecal-db-prod-data` volume; shred deploy/.env.production (values live in cluster Secret); moved the pg_dump from /tmp to ~/.homecal-rollback/ for the safety window. Kept deploy/Dockerfile.{api,web} (GHA build), deploy/.env.production.example, cluster-secrets.env (rotation use), deploy/cluster-secrets.env.example. CLAUDE.md "Production" section rewritten for k3s |
 
 ## Backlog (deferred)
 

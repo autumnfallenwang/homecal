@@ -46,24 +46,50 @@ All commands run from the repo root via Turborepo:
 - **Debugging a specific test**: use `pnpm --filter @homecal/api exec vitest run tests/<file>`
 - **iOS tasks**: `/check swift` or `/test swift` to run only Swift checks
 
-### Production (Docker)
+### Production (k3s — Phase 19, 2026-05-27)
 
-- `homecal start` — build + start all containers
-- `homecal stop` — stop all containers
-- `homecal restart` — quick restart (no rebuild)
-- `homecal rebuild` — force rebuild + restart
-- `homecal update` — git pull + rebuild + migrate (deploy new code)
-- `homecal logs` — follow logs
-- `homecal status` — show container status
+HomeCal runs in the home k3s cluster managed by `~/github/arch-infra` (Argo CD GitOps). Pushing to `main` triggers GHA → image build → push to `ghcr.io/autumnfallenwang/homecal-{api,web}` → arch-infra image-tag bump → Argo CD reconcile → pod roll. End-to-end deploy: ~3-5 min from `git push`.
 
-Prod ports: Web 51000, API 51001, DB 51432. Config in `deploy/.env.production` (not committed).
+URLs (LAN-only):
+- Web: `http://homecal.arch.local`
+- API: `http://homecal-api.arch.local`
+- Grafana logs: `http://grafana.arch.local` → Explore → Loki → `{namespace="homecal"}`
+- Argo CD: `http://argocd.arch.local`
+
+Common ops:
+
+```bash
+# Tail logs (one pod, current)
+kubectl logs -n homecal deploy/homecal-api -f
+
+# Loki history (30d retention)
+curl -sG http://loki.arch.local/loki/api/v1/query_range \
+  --data-urlencode 'query={namespace="homecal"} | json | event="reminder.dispatch.email"' \
+  --data-urlencode "start=$(date -u -d '-1 hour' +%s)000000000" \
+  --data-urlencode "end=$(date -u +%s)000000000"
+
+# Force a re-sync (skip Argo CD's 3-min poll)
+kubectl annotate app homecal -n argocd argocd.argoproj.io/refresh=hard --overwrite
+
+# Bump log level at runtime
+kubectl set env -n homecal deploy/homecal-api LOG_LEVEL=debug
+kubectl rollout status -n homecal deploy/homecal-api
+
+# Inspect cluster DB
+kubectl -n homecal exec homecal-db-0 -- psql -U homecal -d homecal_prod
+```
+
+Secrets (`homecal-secrets` k8s Secret, namespace `homecal`):
+- Created via `scripts/create-cluster-secret.sh` from `cluster-secrets.env` (gitignored, root)
+- Holds DATABASE_URL, POSTGRES_PASSWORD, BETTER_AUTH_SECRET, EMAIL_FROM, EMAIL_PASSWORD, APNS_PRIVATE_KEY
+- Rotate: edit `cluster-secrets.env`, re-run the script (idempotent `kubectl apply`), restart api pod
 
 ### Dev vs Prod
 
-- **Dev**: feature branches, `pnpm dev`, dev DB on port 5432, hot reload
-- **Prod**: main branch, Docker containers, prod DB on port 51432, isolated data
-- **Deploy**: merge to main → `homecal update` (pulls + builds + migrates + restarts)
-- **Migrations**: SQL files in `apps/api/drizzle/`, applied via `pnpm --filter @homecal/api db:migrate`. Generate new ones with `db:generate` after editing `db/schema.ts`. Additive-only — never delete/rename columns. Do NOT use `drizzle-kit push` — it's destructive and doesn't track applied migrations (deprecated in Phase 19)
+- **Dev**: feature branches, `pnpm dev`, dev DB on port 5432, hot reload. `apps/api/.env` holds dev DATABASE_URL + LLM_GATEWAY_URL=http://llmgw.arch.local
+- **Prod**: main branch, k3s cluster, cluster DB on port 5432 in-cluster
+- **Deploy**: merge to main → GHA builds + pushes images + bumps arch-infra → Argo CD applies
+- **Migrations**: SQL files in `apps/api/drizzle/`, applied via `pnpm --filter @homecal/api db:migrate` (dev) or the Helm pre-install Job (cluster, flip `migrate.enabled=true` in arch-infra to activate). Generate new ones with `db:generate` after editing `db/schema.ts`. Additive-only — never delete/rename columns. Do NOT use `drizzle-kit push` — destructive, doesn't track applied migrations (deprecated in Phase 19)
 
 ## Docs
 
