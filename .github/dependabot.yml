@@ -1,3 +1,15 @@
+# Dependabot is currently DISABLED (matches homenews's posture — not on an
+# eager-update cadence; manual review preferred).
+#
+# How disable works: `open-pull-requests-limit: 0` is GitHub's official signal
+# to stop opening PRs for an ecosystem. The file stays in the repo so the
+# config + group patterns are documented and ready to re-enable.
+#
+# To RE-ENABLE: change every `open-pull-requests-limit: 0` below back to a
+# positive integer (5 is a reasonable default for npm; omit the line entirely
+# for docker + github-actions to use the GitHub default of 5). Commit, push,
+# dependabot resumes scanning weekly.
+
 version: 2
 updates:
   # npm — keep API + web dependency trees current. Grouped where bumps cluster.
@@ -6,7 +18,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     groups:
       hono:
         patterns:
@@ -36,6 +48,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    open-pull-requests-limit: 0
 
   # GHA actions (checkout / setup-node / docker-* / pnpm/action-setup —
   # drift starts forcing Node 24 on 2026-06-02; bumps will surface before then).
@@ -44,3 +57,4 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    open-pull-requests-limit: 0
