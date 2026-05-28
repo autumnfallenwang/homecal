@@ -32,6 +32,16 @@ export const auth = betterAuth({
     database: {
       generateId: false, // PostgreSQL generates UUIDs
     },
+    // Phase 19 — k3s cutover uses two ingresses: homecal.arch.local (web) +
+    // homecal-api.arch.local (api). Better Auth client (auth-client.ts) calls
+    // /api/auth/* directly against the API host, so the session cookie defaults
+    // to that subdomain — and isn't sent when the browser hits the web host
+    // for /api/events etc. Setting Domain=.arch.local makes the cookie travel
+    // to both subdomains. LAN-only cluster; no cross-tenant concern.
+    crossSubDomainCookies: {
+      enabled: true,
+      domain: ".arch.local",
+    },
   },
   plugins: [
     admin(),
