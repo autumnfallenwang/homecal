@@ -1,8 +1,7 @@
 "use client";
 
 import type { Holiday } from "@homecal/shared";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Member } from "@/hooks/use-members";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useToday } from "@/hooks/use-today";
 import { holidayKey, indexHolidaysByDate } from "@/lib/holiday-utils";
 import { cn } from "@/lib/utils";
@@ -11,6 +10,12 @@ import { TodayGlance } from "./today-glance";
 import { TodayTimeline } from "./today-timeline";
 
 const SCROLL_COMPRESS_THRESHOLD = 80;
+
+// When the shared member filter has nobody selected, Today shows nothing —
+// matching the month/week/day views (whose filteredEvents go empty). Without
+// this, an empty userIds list makes the API omit the filter and return
+// everyone, which would be the opposite of the other views.
+const EMPTY_TOMORROW = { count: 0, firstTitle: null, hasMultiDayStart: false };
 
 function SunIllustration() {
   return (
@@ -51,7 +56,9 @@ function SunIllustration() {
 
 interface TodayViewProps {
   currentUserId: string;
-  members: Member[];
+  // Shared family filter, owned by the page and rendered in the left sidebar.
+  // Today no longer keeps its own separate filter.
+  visibleMemberIds: Set<string>;
   holidays?: Holiday[];
   onEventClick?: (eventId: string) => void;
   onNewEvent?: () => void;
@@ -68,45 +75,24 @@ function formatLongDate(iso: string): string {
 
 export function TodayView({
   currentUserId,
-  members,
+  visibleMemberIds,
   holidays = [],
   onEventClick,
   onNewEvent,
   onJumpToTomorrow,
 }: TodayViewProps) {
-  // Member filter — session-scoped, always starts as "just me" on mount.
-  const [visibleIds, setVisibleIds] = useState<Set<string>>(() => new Set([currentUserId]));
-  const userIds = useMemo(() => [...visibleIds], [visibleIds]);
+  const noneSelected = visibleMemberIds.size === 0;
+  const userIds = useMemo(() => [...visibleMemberIds], [visibleMemberIds]);
   const { data, isLoading, error } = useToday(userIds);
 
   const serverNow = data ? new Date(data.serverNow) : new Date();
-  const todayEvents = data?.today ?? [];
+  const todayEvents = noneSelected ? [] : (data?.today ?? []);
   const upcoming = todayEvents.find((e) => new Date(e.end) > serverNow);
   const todayHoliday = indexHolidaysByDate(holidays).get(holidayKey(serverNow));
 
   const showTimelineSkeleton = isLoading && !data;
   const showEmptyState = !showTimelineSkeleton && todayEvents.length === 0;
   const showTimeline = !showTimelineSkeleton && todayEvents.length > 0;
-
-  const handleToggleMember = useCallback((id: string) => {
-    setVisibleIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleOnlyMe = useCallback(() => {
-    setVisibleIds(new Set([currentUserId]));
-  }, [currentUserId]);
-
-  const handleEveryone = useCallback(() => {
-    setVisibleIds(new Set(members.map((m) => m.id)));
-  }, [members]);
 
   // Scroll-driven compression of the hero
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -230,13 +216,8 @@ export function TodayView({
             <TodayGlance
               events={todayEvents}
               serverNow={serverNow}
-              tomorrow={data.tomorrow}
+              tomorrow={noneSelected ? EMPTY_TOMORROW : data.tomorrow}
               currentUserId={currentUserId}
-              members={members}
-              visibleIds={visibleIds}
-              onToggleMember={handleToggleMember}
-              onOnlyMe={handleOnlyMe}
-              onEveryone={handleEveryone}
               onJumpToTomorrow={onJumpToTomorrow ?? (() => {})}
             />
           ) : (

@@ -2,8 +2,6 @@
 
 import { ChevronRight } from "lucide-react";
 import type { CalendarEvent } from "@/hooks/use-events";
-import type { Member } from "@/hooks/use-members";
-import { MemberChip } from "./member-chip";
 import { formatHourMinute } from "./time-grid-utils";
 
 interface TomorrowPayload {
@@ -17,11 +15,6 @@ interface TodayGlanceProps {
   serverNow: Date;
   tomorrow: TomorrowPayload;
   currentUserId: string;
-  members: Member[];
-  visibleIds: Set<string>;
-  onToggleMember: (id: string) => void;
-  onOnlyMe: () => void;
-  onEveryone: () => void;
   onJumpToTomorrow: () => void;
 }
 
@@ -49,11 +42,6 @@ export function TodayGlance({
   serverNow,
   tomorrow,
   currentUserId,
-  members,
-  visibleIds,
-  onToggleMember,
-  onOnlyMe,
-  onEveryone,
   onJumpToTomorrow,
 }: TodayGlanceProps) {
   const upcoming = events.find((e) => new Date(e.end) > serverNow);
@@ -108,45 +96,6 @@ export function TodayGlance({
           </span>
         </div>
       </div>
-
-      {/* ─── Showing / member filter ─── */}
-      {members.length > 0 && (
-        <div className="rounded-xl border border-rule p-4">
-          <div className="mb-2 flex items-baseline justify-between gap-2">
-            <div className="font-display text-xs italic uppercase tracking-widest text-muted-foreground">
-              Showing
-            </div>
-            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-              <button
-                type="button"
-                onClick={onOnlyMe}
-                className="rounded-full px-1 transition-colors hover:text-accent"
-              >
-                Only me
-              </button>
-              <span className="opacity-50">·</span>
-              <button
-                type="button"
-                onClick={onEveryone}
-                className="rounded-full px-1 transition-colors hover:text-accent"
-              >
-                Everyone
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {members.map((m) => (
-              <MemberChip
-                key={m.id}
-                member={m}
-                size="sm"
-                checked={visibleIds.has(m.id)}
-                onClick={() => onToggleMember(m.id)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ─── Tomorrow teaser ─── */}
       {tomorrow.count > 0 && (

@@ -358,7 +358,7 @@ export default function HomePage() {
           {view === "today" && (
             <TodayView
               currentUserId={session.user.id}
-              members={members}
+              visibleMemberIds={activeMemberIds}
               holidays={holidays}
               onEventClick={handleEventClick}
               onNewEvent={handleNewEvent}
