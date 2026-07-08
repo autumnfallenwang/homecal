@@ -38,10 +38,20 @@ export const auth = betterAuth({
     // to that subdomain — and isn't sent when the browser hits the web host
     // for /api/events etc. Setting Domain=.arch.local makes the cookie travel
     // to both subdomains. LAN-only cluster; no cross-tenant concern.
-    crossSubDomainCookies: {
-      enabled: true,
-      domain: ".arch.local",
-    },
+    //
+    // Only applied when COOKIE_DOMAIN is set (the chart sets it to .arch.local in
+    // the cluster). In local dev it's unset, so cookies stay host-scoped to
+    // localhost — a Domain=.arch.local cookie is invalid for localhost and the
+    // browser silently drops it, which looks like "sign-in 200 then 401 on every
+    // protected request".
+    ...(process.env.COOKIE_DOMAIN?.trim()
+      ? {
+          crossSubDomainCookies: {
+            enabled: true,
+            domain: process.env.COOKIE_DOMAIN.trim(),
+          },
+        }
+      : {}),
   },
   plugins: [
     admin(),

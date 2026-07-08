@@ -38,6 +38,10 @@ api:
     API_PORT: "52001"
     BETTER_AUTH_URL: http://homecal-api.arch.local
     CORS_ORIGINS: http://homecal.arch.local
+    # Scopes the Better Auth session cookie to Domain=.arch.local so it travels
+    # to both the web (homecal.arch.local) and api (homecal-api.arch.local)
+    # ingresses. Unset in local dev — cookies stay host-scoped to localhost.
+    COOKIE_DOMAIN: .arch.local
     LOG_LEVEL: info
     # In-cluster Service DNS for llmgw (cross-namespace; llmgw lives in `llmgw` ns).
     LLM_GATEWAY_URL: http://llmgw.llmgw
