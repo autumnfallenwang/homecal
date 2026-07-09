@@ -308,6 +308,20 @@ Cutover completed 2026-05-27. HomeCal moved off the single-host docker-compose s
 |---|------|--------|-------|
 | 124 | I1: decommission docker artifacts | ✅ Done | Removed deploy/compose.yaml + deploy/homecal CLI; removed 4 stopped containers + the `deploy_homecal-db-prod-data` volume; shred deploy/.env.production (values live in cluster Secret); moved the pg_dump from /tmp to ~/.homecal-rollback/ for the safety window. Kept deploy/Dockerfile.{api,web} (GHA build), deploy/.env.production.example, cluster-secrets.env (rotation use), deploy/cluster-secrets.env.example. CLAUDE.md "Production" section rewritten for k3s |
 
+### Phase 21 — Daily Digest
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 125 | Schema + shared types + migration | ✅ Done | `digest_settings` singleton table (enabled/sendAt/timezone/lastSentOn, unique `singleton`) + `users.receivesDailyDigest` (default true); shared `updateDigestSettingsSchema`/`digestSettingsSchema`; additive migration `0011_first_war_machine.sql` |
+| 126 | Extract `getTodayEvents()` | ✅ Done | Moved the today-window query out of the `/today` handler into `services/today.ts` (visibility parameterized: requester's own private events vs all-private-excluded for the digest); `/today` response unchanged, existing today tests green |
+| 127 | Digest renderer + email | ✅ Done | `services/digest.ts` — pure `renderDigest`/`formatLocalTimeRange` (tz-correct, private-excluded, time · title · location · assignees); `sendDigestEmail` shares `sendMail` with reminders |
+| 128 | Digest scheduler | ✅ Done | `digest-settings.ts` (getOrCreate singleton, recipients, pure `isDigestDue`) + `digest-scheduler.ts` (`dispatchDigest`/`checkDueDigest`/`startDigestScheduler`) on the 60s tick; once-per-day `lastSentOn` dedup; wired in `index.ts`. `isDigestDue` fires only in a narrow `[sendAt, sendAt+5min)` window so **enabling later in the day never retroactively sends** — only reaching the send time (or "Send test") dispatches |
+| 129 | Admin config API + test-send | ✅ Done | `GET`/`PATCH /api/admin/digest` (config + recipient list) + `POST /api/admin/digest/test` (immediate dispatch); admin-gated |
+| 130 | Notifications tab (web UI) | ✅ Done | Admin-page **Notifications** tab (`?tab=notifications`): `use-digest` hook + `notifications-panel.tsx` — enable `Switch`, `Input type="time"` + native timezone `<select>`, `MemberChip` recipient picker, Save (`PATCH`) + "Send test" (`POST /digest/test`) with inline accent-soft feedback. Relative-path fetch via the next.config proxy |
+| 131 | Digest tests (exhaustive) | ✅ Done | `digest.test.ts` (16): render/format/`isDigestDue` incl. window semantics + "enabling late doesn't fire". `digest.integration.test.ts`: dispatch, private-exclusion, dedup, empty-day, 0-recipients test-send, recipients-only PATCH, empty-body 400, admin 401/403, `getTodayEvents` visibility, no-retroactive-send |
+| 132 | HTML email template | ✅ Done | `renderDigestHtml()` in `services/digest.ts` — email-safe (tables + inline styles + hex, Georgia serif) matching the approved mockup; masthead + serif date + count pill + per-event time/title/location/colored-dot assignees; HTML-escaped, hex-only color guard. `sendMail`/`sendDigestEmail` send `html` alongside the plain-text fallback; `dispatchDigest` builds both. Unit tests (content, escaping, empty-day, color guard) pass; integration asserts html passed |
+| 133 | Printable digest page | ✅ Done | "Print" button on the Notifications tab → `GET /api/admin/digest/print` (admin-gated) opens a standalone page of today's digest that auto-opens the print dialog (`@media print` hides its toolbar). Shares the email card (`renderDigestCardHtml`) + `buildTodayDigestEvents`. Verified: 200 `text/html` with today's events + `window.print()`; unit + integration (403/401 gates) tests |
+
 ## Backlog (deferred)
 
 | Item | Notes |
@@ -328,7 +342,7 @@ Cutover completed 2026-05-27. HomeCal moved off the single-host docker-compose s
 ## What's Working
 
 - Monorepo: `apps/api` (Hono, port 3001), `apps/web` (Next.js, port 3000), `apps/ios` (SwiftUI), `packages/shared`
-- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (151 unit tests + 123 integration tests; 13 Swift tests)
+- `pnpm dev` / `pnpm lint` / `pnpm test` across all packages (472 API tests: unit + integration; 13 Swift tests)
 - Docker PostgreSQL: `scripts/db-start.sh` / `db-stop.sh` / `db-reset.sh`
 - Auth: signup, signin, signout, session check, admin plugin, bearer token plugin, `requireAuth` middleware (cookies + bearer)
 - Events CRUD: 5 endpoints with visibility rules, Zod validation, change logging, date range filtering
@@ -342,6 +356,7 @@ Cutover completed 2026-05-27. HomeCal moved off the single-host docker-compose s
 - Reminders: `event_reminders` table (eventId, minutesBefore, channel) with unique constraint, CRUD at `/api/events/:id/reminders`, events API includes reminders with channel in responses
 - Device tokens: `device_tokens` table (userId, platform, token) with upsert, `/api/devices` registration/unregistration, tokens persist beyond session expiry for push notifications
 - Reminder scheduler: setInterval cron (60s) checks for due reminders, dispatches by channel (email via Nodemailer/Gmail SMTP or push via APNs), marks `sentAt` to prevent duplicates, cleans up stale device tokens on BadDeviceToken
+- Daily digest (Phase 21, complete): admin-configured family digest email — `digest_settings` singleton config (enabled/sendAt/timezone) + per-user `receivesDailyDigest` recipients; a 60s `digest-scheduler` sends once per day at the local send time (private events excluded; each event = time · title · location · assignees); admin API `GET`/`PATCH /api/admin/digest` + `POST /digest/test`; admin **Notifications** tab (`/admin?tab=notifications`) with enable toggle, send-at + timezone, `MemberChip` recipient picker, and a "Send test" button
 - Email notifications: Nodemailer + Gmail SMTP (free tier 500/day), sends to assignees' email addresses, graceful skip when not configured
 - APNs client: token-based JWT auth (ES256), HTTP/2 to api.push.apple.com, graceful skip when credentials not configured
 - LAN setup: Arch Linux (192.168.1.163) backend, Mac Air web frontend + iOS dev
@@ -367,7 +382,9 @@ Phase 19 (k3s migration, tasks 84–124) shipped 2026-05-27. Cluster is the sour
 - Flip `migrate.enabled=true` in arch-infra's `apps/homecal.yaml` after a few days — enables the Helm pre-install hook to auto-apply future Drizzle migrations
 - Optional: write a backup job for the cluster PVC (parity with the old docker volume which also had none)
 
-**Phase 20** (Public API ergonomics) remains the next active backlog phase per [design-plan.md](design-plan.md).
+**Phase 21 — Daily Digest**: **complete** (tasks 125–133) on branch `fix/dev-cookie-and-today-filter` — schema + migration, `getTodayEvents` refactor, text + **HTML** renderer, email send, the 60s digest scheduler (send-window fire semantics), the admin config API, and the admin **Notifications** tab. Also uncommitted alongside: self-service email/password fix in Account settings (`auth.ts` + `calendar-header.tsx`). **All uncommitted — next step is to commit + run the full suite.**
+
+**Phase 20** (Public API ergonomics) is the next active backlog phase per [design-plan.md](design-plan.md).
 
 ## Reference Docs
 

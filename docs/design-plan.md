@@ -518,6 +518,37 @@ namespace: homecal
 
 **Deliverables** (TBD — tasks numbered when this phase is planned for real): a set of small focused PRs, each with tests + OpenAPI spec updates in the same commit.
 
+### Phase 21 — Daily Digest (admin-configured morning email)
+
+An admin-configured email that summarizes the day's family calendar and lands in chosen family members' inboxes each morning. Reuses the existing reminder-scheduler cadence and the `today` service; adds an admin-only **Notifications** tab to `/admin`. Mockup approved 2026-07-08.
+
+**Design decisions**:
+- **Admin-only, family-level config.** One digest for the household, configured on a new **Notifications** tab in `/admin` (alongside Family, Services), admin-gated. Not a per-user preferences screen.
+- **Recipients = member multi-select.** A color-chip picker like the event assignee control; each selected member receives the *same* summary at their own email. Stored as a per-user `receivesDailyDigest` flag so the chips map straight onto it. Defaults to everyone.
+- **Schedule is one family-level config**: `enabled`, `sendAt` (local `HH:MM`), `timezone` (IANA, selectable dropdown next to the time, default `America/New_York`). One send per day; dedup via a `lastSentOn` local-date marker. Fire condition (`isDigestDue`) is *enabled AND local time is within a short window `[sendAt, sendAt + 5 min)` AND not yet sent today*. **Deliberately a narrow window, not "≥ sendAt all day"** — otherwise merely *enabling* the digest in the afternoon retroactively fires it. The 5-min grace absorbs a delayed 60s tick / quick restart; only reaching the send time (or "Send test") dispatches.
+- **Why timezone is explicit here and nowhere else.** Event `start`/`end` are UTC `timestamptz`; interactive views render them in the *browser's* zone (`Intl…resolvedOptions().timeZone`), so the zone was always implicit. The digest runs server-side on a timer with no browser, so both "when to fire" and "what counts as today" need an explicit zone. Single household → one selectable family timezone; it's the only place in the app tz is pinned.
+- **Content = all non-private events for that local day.** Private events are excluded entirely, including a recipient's own (deliberately stricter than `/today`, which shows an owner their own private events). Each event lists: start–end time, title, location (when set), assignees (color dots + names). No description / owner / reminders.
+- **Reuse, don't rebuild.** Extract the today-events query from the `/api/events/today` handler into `services/today.ts` `getTodayEvents({ tz, userIds, now })`; the endpoint and the digest both call it. Digest dispatch piggybacks on `startReminderScheduler`'s 60s tick (a sibling `checkDueDigests`) and `services/email.ts`.
+
+**Tasks**:
+125. **Schema + shared types.** Additive migration: family digest config (`enabled`, `sendAt`, `timezone`, `lastSentOn`) + per-user `receivesDailyDigest`. Zod schemas in `packages/shared`. Generate via `db:generate`; additive-only.
+126. **Extract `getTodayEvents()`** into `services/today.ts` and point `/api/events/today` at it — behavior-preserving, covered by the existing today integration tests.
+127. **Digest builder + email.** Render the summary (time · title · location · assignees, private excluded) as text (+ optional HTML); add `sendDigestEmail` to `services/email.ts`, gated by `getEmailConfig()`.
+128. **Digest scheduler.** `checkDueDigests()` on the 60s tick: for the family config, if enabled and local-time ≥ `sendAt` and `lastSentOn` ≠ today, build the summary and email each recipient, then stamp `lastSentOn`. Injectable `DispatchFns` for tests.
+129. **Config API.** Admin `GET`/`PATCH` for the digest config + recipient toggles; an admin **"send test digest now"** endpoint that dispatches immediately to current recipients.
+130. **Notifications tab (web).** New admin-only tab on `/admin`: enable toggle, send-at time + timezone dropdown, recipient chips, "Send test" button — Warm Editorial aesthetic. Config shape: on/off · send-at + tz · recipients.
+131. **Tests.** Unit: send-time-in-tz match, dedup (no double-send), private exclusion, digest rendering, empty-day handling. Integration: seed today's events, set `sendAt` to "now", tick → exactly one email per recipient with correct contents; second tick → no resend. Email mocked at the module boundary.
+
+132. **HTML email template.** The digest currently sends plain text only; add a nicer HTML body. `renderDigestHtml()` beside `renderDigest()` in `services/digest.ts` produces an **email-safe** HTML body — table-based layout, inline styles, hex colors, Georgia serif (email-safe, matches the app) — following the approved mockup: warm-editorial masthead (sun mark + `HOMECAL`), big serif date + count pill, one row per event (time · title · location-with-pin · colored assignee chips, "Everyone" for all-family), hairline footer ("private events are left out"). Extend `sendMail`/`sendDigestEmail` to pass `html` alongside `text` (nodemailer sends both; **plain text stays the fallback**); `dispatchDigest` builds both from the same event list. Test asserts the HTML contains each event's title / time / location / assignee names and the empty-day copy. Mockup approved 2026-07-08.
+
+133. **Printable digest page.** A "Print" button on the Notifications tab opens `GET /api/admin/digest/print` (admin-gated) in a new tab — a standalone HTML page of today's digest that auto-opens the browser print dialog and hides its own toolbar via `@media print`. Reuses the email card: `renderDigestHtml` and a new `renderDigestPrintPage` share `renderDigestCardHtml`; the today-events build is shared via `buildTodayDigestEvents`. Tests: unit (page contains the digest + `window.print()`) + integration (admin 200 text/html, non-admin 403, unauth 401).
+
+**Out of scope for Phase 21** (deferred):
+- Per-user custom send times (single family time for v1).
+- Per-recipient content filtering — everyone gets the same day summary.
+- Push-channel digest (email only for now).
+- Weekly / monthly digests; a "skip days with no events" toggle.
+
 ### Backlog — Future Enhancements (deferred)
 - iOS LocalConfig.swift update post Phase-19 cutover — point at homecal-api.arch.local; requires LAN DNS resolution on device
 - Sealed Secrets bootstrap — encrypt secrets at rest in arch-infra (no-downtime env source swap once operator is installed)
