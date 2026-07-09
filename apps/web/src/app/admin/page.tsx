@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { FamilyCard, type FamilyMember } from "@/components/admin/family-card";
 import { InviteCard } from "@/components/admin/invite-card";
 import { MemberDrawer } from "@/components/admin/member-drawer";
+import { NotificationsPanel } from "@/components/admin/notifications-panel";
 import { ServiceAccountDrawer } from "@/components/admin/service-account-drawer";
 import { ServicesGrid } from "@/components/admin/services-grid";
 import { Button } from "@/components/ui/button";
@@ -13,13 +14,14 @@ import { type ServiceAccount, useServiceAccounts } from "@/hooks/use-service-acc
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
-type AdminTab = "family" | "services";
+type AdminTab = "family" | "services" | "notifications";
 
 export default function AdminPage() {
   const { session, isPending } = useAuthRedirect(true);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tab: AdminTab = searchParams.get("tab") === "services" ? "services" : "family";
+  const rawTab = searchParams.get("tab");
+  const tab: AdminTab = rawTab === "services" || rawTab === "notifications" ? rawTab : "family";
 
   const [loading, setLoading] = useState(true);
   const [allUsers, setAllUsers] = useState<FamilyMember[]>([]);
@@ -105,21 +107,21 @@ export default function AdminPage() {
   );
 
   let heroSubtitle: string;
-  if (tab === "family") {
-    if (loading) {
-      heroSubtitle = "loading…";
-    } else {
-      const s = allUsers.length === 1 ? "" : "s";
-      heroSubtitle = `${allUsers.length} member${s} · managed by ${session?.user?.name ?? "you"}`;
-    }
-  } else if (servicesLoading) {
-    heroSubtitle = "loading…";
-  } else {
+  if (tab === "notifications") {
+    heroSubtitle = "the family's morning summary";
+  } else if (tab === "services") {
     const s = services.length === 1 ? "" : "s";
-    heroSubtitle = `${services.length} service${s} · machine callers`;
+    heroSubtitle = servicesLoading
+      ? "loading…"
+      : `${services.length} service${s} · machine callers`;
+  } else {
+    const s = allUsers.length === 1 ? "" : "s";
+    heroSubtitle = loading
+      ? "loading…"
+      : `${allUsers.length} member${s} · managed by ${session?.user?.name ?? "you"}`;
   }
 
-  const heroTitle = tab === "family" ? "Family" : "Services";
+  const heroTitle = { family: "Family", services: "Services", notifications: "Notifications" }[tab];
 
   if (isPending || !session || !isAdmin) {
     return null;
@@ -155,7 +157,7 @@ export default function AdminPage() {
         className="mb-8 inline-flex items-center gap-1 rounded-full border border-rule bg-card p-1"
         role="tablist"
       >
-        {(["family", "services"] as const).map((key) => (
+        {(["family", "services", "notifications"] as const).map((key) => (
           <button
             key={key}
             type="button"
@@ -206,6 +208,9 @@ export default function AdminPage() {
       )}
       {tab === "services" && (
         <ServicesGrid services={services} loading={servicesLoading} onOpen={setSelectedService} />
+      )}
+      {tab === "notifications" && (
+        <NotificationsPanel enabled={isAdmin && tab === "notifications"} />
       )}
 
       <MemberDrawer
