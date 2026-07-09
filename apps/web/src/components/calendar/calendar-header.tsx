@@ -115,6 +115,7 @@ export function CalendarHeader({
   const [profileEmail, setProfileEmail] = useState(userEmail ?? "");
   const [profileColor, setProfileColor] = useState(userColor ?? "#3b82f6");
   const [profilePassword, setProfilePassword] = useState("");
+  const [profileCurrentPassword, setProfileCurrentPassword] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
@@ -145,6 +146,7 @@ export function CalendarHeader({
     setProfileEmail(userEmail ?? "");
     setProfileColor(userColor ?? "#3b82f6");
     setProfilePassword("");
+    setProfileCurrentPassword("");
     setProfileError(null);
     setHolidayDraft(prefs.holidayCountries);
     setCountrySearch("");
@@ -157,17 +159,23 @@ export function CalendarHeader({
     setProfileSaving(true);
     try {
       if (profileColor !== userColor) {
-        await authClient.updateUser({ color: profileColor });
+        const res = await authClient.updateUser({ color: profileColor });
+        if (res.error) throw new Error(res.error.message ?? "Failed to update color");
       }
       if (profileEmail !== userEmail) {
-        await authClient.changeEmail({ newEmail: profileEmail });
+        const res = await authClient.changeEmail({ newEmail: profileEmail });
+        if (res.error) throw new Error(res.error.message ?? "Failed to change email");
       }
       if (profilePassword) {
-        await authClient.changePassword({
+        if (!profileCurrentPassword) {
+          throw new Error("Enter your current password to set a new one");
+        }
+        const res = await authClient.changePassword({
           newPassword: profilePassword,
-          currentPassword: "",
+          currentPassword: profileCurrentPassword,
           revokeOtherSessions: false,
         });
+        if (res.error) throw new Error(res.error.message ?? "Failed to change password");
       }
       const holidayChanged =
         holidayDraft.length !== prefs.holidayCountries.length ||
@@ -426,8 +434,27 @@ export function CalendarHeader({
                     onChange={(e) => setProfilePassword(e.target.value)}
                     placeholder="Leave blank to keep current"
                     minLength={8}
+                    autoComplete="new-password"
                   />
                 </div>
+                {profilePassword && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label
+                      htmlFor="profile-current-password"
+                      className="font-display text-xs italic tracking-wide text-muted-foreground"
+                    >
+                      Current password
+                    </Label>
+                    <Input
+                      id="profile-current-password"
+                      type="password"
+                      value={profileCurrentPassword}
+                      onChange={(e) => setProfileCurrentPassword(e.target.value)}
+                      placeholder="Required to change password"
+                      autoComplete="current-password"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-1.5">

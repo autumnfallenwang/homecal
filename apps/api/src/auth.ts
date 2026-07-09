@@ -16,6 +16,14 @@ export const auth = betterAuth({
     : ["http://localhost:3000"],
   emailAndPassword: { enabled: true },
   user: {
+    // Let a signed-in user change their own email from Account settings. Emails
+    // here are unverified (no signup verification), and `updateEmailWithoutVerification`
+    // makes Better Auth apply the change directly for unverified accounts (see
+    // better-auth update-user.mjs change-email handler) — no confirmation email.
+    // Without this flag it falls through to requiring an email-verification setup.
+    // Add `sendChangeEmailVerification` if a confirm step is ever wanted. Admins
+    // change others' emails via the admin plugin, which bypasses this flow.
+    changeEmail: { enabled: true, updateEmailWithoutVerification: true },
     additionalFields: {
       color: { type: "string", required: true },
       // Phase 17: marks a user record as a "service account" (machine caller
