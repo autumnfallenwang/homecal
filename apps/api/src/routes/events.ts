@@ -7,7 +7,7 @@ import {
   todayQuerySchema,
   updateEventSchema,
 } from "@homecal/shared";
-import { and, desc, eq, gt, gte, lt, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, lte, or } from "drizzle-orm";
 import { Hono } from "hono";
 import type { auth } from "../auth.js";
 import { db } from "../db/index.js";
@@ -22,7 +22,7 @@ import {
   callLlmWithImage,
   parseLlmResponse,
 } from "../services/llm.js";
-import { computeLocalDayWindows, eventOverlapsWindow } from "../services/today.js";
+import { getTodayEvents, type TodayEvent } from "../services/today.js";
 
 type Session = typeof auth.$Infer.Session;
 
@@ -325,45 +325,18 @@ eventsApp.get("/today", async (c) => {
       )
     : null;
 
-  // Compute local-day windows; return 400 on invalid IANA zone.
-  let windows: ReturnType<typeof computeLocalDayWindows>;
+  const requesterId = c.get("user").id;
+
+  // Shared with the daily digest — see getTodayEvents in services/today.ts.
+  // Throws on an invalid IANA zone → 400.
+  let result: Awaited<ReturnType<typeof getTodayEvents>>;
   try {
-    windows = computeLocalDayWindows(tz);
+    result = await getTodayEvents({ tz, requesterId, userIds: userIdFilter });
   } catch {
     return c.json({ error: "Invalid timezone" }, 400);
   }
-  const { todayStart, todayEnd, tomorrowStart, tomorrowEnd } = windows;
-
-  const requesterId = c.get("user").id;
-
-  // Fetch everything overlapping [todayStart, tomorrowEnd) in one query.
-  const raw = await db.query.events.findMany({
-    where: and(
-      or(eq(events.private, false), and(eq(events.private, true), eq(events.ownerId, requesterId))),
-      lt(events.start, tomorrowEnd),
-      gt(events.end, todayStart),
-    ),
-    orderBy: events.start,
-    with: { assignees: { with: { user: true } }, reminders: true },
-  });
-
-  // Assignee filter: keep events with at least one assignee in the set.
-  const matchesUserFilter = (e: (typeof raw)[number]) => {
-    if (!userIdFilter) return true;
-    return e.assignees.some((a) => userIdFilter.has(a.user.id));
-  };
-
-  const todayEvents = raw.filter((e) => {
-    const s = new Date(e.start);
-    const en = new Date(e.end);
-    return eventOverlapsWindow(s, en, todayStart, todayEnd) && matchesUserFilter(e);
-  });
-
-  const tomorrowEvents = raw.filter((e) => {
-    const s = new Date(e.start);
-    const en = new Date(e.end);
-    return eventOverlapsWindow(s, en, tomorrowStart, tomorrowEnd) && matchesUserFilter(e);
-  });
+  const { windows, todayEvents, tomorrowEvents } = result;
+  const { tomorrowStart, tomorrowEnd } = windows;
 
   const hasMultiDayStart = tomorrowEvents.some((e) => {
     const s = new Date(e.start).getTime();
@@ -371,7 +344,7 @@ eventsApp.get("/today", async (c) => {
     return s < tomorrowStart.getTime() || en > tomorrowEnd.getTime();
   });
 
-  const shape = (e: (typeof raw)[number]) => {
+  const shape = (e: TodayEvent) => {
     const { assignees: rawAssignees, reminders: rawReminders, ...rest } = e;
     return {
       ...rest,

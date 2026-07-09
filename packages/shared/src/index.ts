@@ -137,4 +137,29 @@ export const userPreferencesSchema = z.object({
 });
 export type UserPreferences = z.infer<typeof userPreferencesSchema>;
 
+// Daily digest (Phase 21) — admin-configured family digest. Single family-level
+// config (enabled/sendAt/timezone) plus a recipient list (member user IDs).
+// sendAt is a local 24-hour "HH:MM"; timezone is a single household IANA zone.
+const HHMM_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+export const updateDigestSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    sendAt: z.string().regex(HHMM_REGEX, "Time must be HH:MM (24-hour)").optional(),
+    timezone: z.string().min(1).max(64).regex(IANA_TZ_REGEX, "Invalid IANA timezone").optional(),
+    recipientIds: z.array(z.string().uuid()).optional(),
+  })
+  .refine((d) => Object.values(d).some((v) => v !== undefined), {
+    message: "At least one field must be provided",
+  });
+export type UpdateDigestSettingsInput = z.infer<typeof updateDigestSettingsSchema>;
+
+export const digestSettingsSchema = z.object({
+  enabled: z.boolean(),
+  sendAt: z.string(),
+  timezone: z.string(),
+  lastSentOn: z.string().nullable(),
+  recipientIds: z.array(z.string().uuid()),
+});
+export type DigestSettings = z.infer<typeof digestSettingsSchema>;
+
 export { acceptLanguageToCountry, localeToCountry } from "./locale.js";

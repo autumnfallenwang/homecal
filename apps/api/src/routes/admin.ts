@@ -1,5 +1,9 @@
 import { randomBytes } from "node:crypto";
-import { createApiKeyInputSchema, createServiceAccountSchema } from "@homecal/shared";
+import {
+  createApiKeyInputSchema,
+  createServiceAccountSchema,
+  updateDigestSettingsSchema,
+} from "@homecal/shared";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { auth } from "../auth.js";
@@ -7,6 +11,14 @@ import { db } from "../db/index.js";
 import { apikeys, sessions, users } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/require-admin.js";
+import { renderDigestPrintPage } from "../services/digest.js";
+import { buildTodayDigestEvents, dispatchDigest } from "../services/digest-scheduler.js";
+import {
+  getDigestRecipients,
+  getOrCreateDigestSettings,
+  saveDigestSettings,
+  setDigestRecipients,
+} from "../services/digest-settings.js";
 import { generateTempPassword } from "../services/temp-password.js";
 
 type Session = typeof auth.$Infer.Session;
@@ -356,4 +368,57 @@ adminApp.post("/service-accounts", async (c) => {
     const message = err instanceof Error ? err.message : "Failed to create service account";
     return c.json({ error: message }, 500);
   }
+});
+
+// ─── Daily digest (Phase 21) — admin-configured family digest ───
+
+async function digestConfigResponse() {
+  const settings = await getOrCreateDigestSettings();
+  const recipients = await getDigestRecipients();
+  return {
+    enabled: settings.enabled,
+    sendAt: settings.sendAt,
+    timezone: settings.timezone,
+    lastSentOn: settings.lastSentOn,
+    recipientIds: recipients.map((r) => r.id),
+  };
+}
+
+// GET /digest — current config + recipient list
+adminApp.get("/digest", async (c) => {
+  return c.json(await digestConfigResponse());
+});
+
+// PATCH /digest — update config and/or recipients
+adminApp.patch("/digest", async (c) => {
+  const body = await c.req.json();
+  const parsed = updateDigestSettingsSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.issues }, 400);
+  }
+
+  const { enabled, sendAt, timezone, recipientIds } = parsed.data;
+  if (enabled !== undefined || sendAt !== undefined || timezone !== undefined) {
+    await saveDigestSettings({ enabled, sendAt, timezone });
+  }
+  if (recipientIds !== undefined) {
+    await setDigestRecipients(recipientIds);
+  }
+
+  return c.json(await digestConfigResponse());
+});
+
+// POST /digest/test — send the digest now, ignoring schedule + dedup
+adminApp.post("/digest/test", async (c) => {
+  const result = await dispatchDigest();
+  return c.json(result);
+});
+
+// GET /digest/print — a printable HTML page of today's digest (opens in a new
+// tab and auto-opens the print dialog). Same content as the email.
+adminApp.get("/digest/print", async (c) => {
+  const settings = await getOrCreateDigestSettings();
+  const now = new Date();
+  const events = await buildTodayDigestEvents(settings.timezone, now);
+  return c.html(renderDigestPrintPage({ events, tz: settings.timezone, now }));
 });

@@ -6,6 +6,10 @@
  * recalculated at the target date, not at the current moment.
  */
 
+import { and, eq, gt, lt, or } from "drizzle-orm";
+import { db } from "../db/index.js";
+import { events } from "../db/schema.js";
+
 export interface LocalDayWindows {
   todayStart: Date;
   todayEnd: Date;
@@ -103,3 +107,50 @@ export function eventOverlapsWindow(
 ): boolean {
   return eventStart.getTime() < winEnd.getTime() && eventEnd.getTime() > winStart.getTime();
 }
+
+/**
+ * Fetch events overlapping "today" and "tomorrow" for a timezone — shared by the
+ * GET /events/today endpoint and the daily digest job.
+ *
+ * Visibility: when `requesterId` is set, that user's own private events are
+ * included (the Today view); when it's null/undefined, ALL private events are
+ * excluded (the digest — private is personal). `userIds`, when given, keeps only
+ * events with an assignee in the set. Throws `RangeError` on an invalid IANA zone.
+ */
+export async function getTodayEvents(opts: {
+  tz: string;
+  now?: Date;
+  requesterId?: string | null;
+  userIds?: Set<string> | null;
+}) {
+  const { tz, now, requesterId = null, userIds = null } = opts;
+  const windows = computeLocalDayWindows(tz, now);
+  const { todayStart, todayEnd, tomorrowStart, tomorrowEnd } = windows;
+
+  const visibility = requesterId
+    ? or(eq(events.private, false), and(eq(events.private, true), eq(events.ownerId, requesterId)))
+    : eq(events.private, false);
+
+  const raw = await db.query.events.findMany({
+    where: and(visibility, lt(events.start, tomorrowEnd), gt(events.end, todayStart)),
+    orderBy: events.start,
+    with: { assignees: { with: { user: true } }, reminders: true },
+  });
+
+  const keep = (e: (typeof raw)[number]) =>
+    !userIds || e.assignees.some((a) => userIds.has(a.user.id));
+
+  const todayEvents = raw.filter(
+    (e) => eventOverlapsWindow(new Date(e.start), new Date(e.end), todayStart, todayEnd) && keep(e),
+  );
+  const tomorrowEvents = raw.filter(
+    (e) =>
+      eventOverlapsWindow(new Date(e.start), new Date(e.end), tomorrowStart, tomorrowEnd) &&
+      keep(e),
+  );
+
+  return { windows, todayEvents, tomorrowEvents };
+}
+
+/** Element of `getTodayEvents().todayEvents` — an event with its assignees (+user) and reminders. */
+export type TodayEvent = Awaited<ReturnType<typeof getTodayEvents>>["todayEvents"][number];

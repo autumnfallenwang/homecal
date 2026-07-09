@@ -31,6 +31,11 @@ export const users = pgTable("users", {
   // set yet" — the API derives a default from the request's accept-language
   // header and returns it transiently; the value is only persisted on PATCH.
   holidayCountries: text().array(),
+  // Phase 21: whether this member receives the daily digest email. A plain
+  // column (like holidayCountries) managed by the admin /api/admin/digest route,
+  // not a Better Auth additionalField. Defaults on — the digest itself is off
+  // until an admin enables it, so auto-subscribing new members is harmless.
+  receivesDailyDigest: boolean().notNull().default(true),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
@@ -216,6 +221,25 @@ export const apikeys = pgTable("apikeys", {
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
+
+// Phase 21 — admin-configured daily digest. Single-row (family-level) config:
+// the `singleton` unique constraint guarantees at most one row. Recipients are
+// tracked per-user via users.receivesDailyDigest; lastSentOn is the once-per-day
+// dedup marker (a local YYYY-MM-DD in `timezone`).
+export const digestSettings = pgTable(
+  "digest_settings",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    singleton: boolean().notNull().default(true),
+    enabled: boolean().notNull().default(false),
+    sendAt: text().notNull().default("07:00"),
+    timezone: text().notNull().default("America/New_York"),
+    lastSentOn: text(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("digest_settings_singleton_unique").on(table.singleton)],
+);
 
 // Relations for Drizzle relational query builder
 
