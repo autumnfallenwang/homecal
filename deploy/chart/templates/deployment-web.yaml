@@ -25,7 +25,7 @@ spec:
           # NEXT_PUBLIC_AUTH_URL is baked into the client bundle at build time
           # (Dockerfile.web ARG), NOT passed through env at runtime — Next.js
           # inlines NEXT_PUBLIC_* values during `next build`. The GHA workflow
-          # passes --build-arg NEXT_PUBLIC_AUTH_URL=http://homecal-api.arch.local.
+          # passes --build-arg NEXT_PUBLIC_AUTH_URL=http://homecal-api.arch.internal.
           #
           # API_URL (runtime env, set below) is the cluster-internal Service DNS
           # the Next.js rewrite proxy uses to reach the API from inside the pod.

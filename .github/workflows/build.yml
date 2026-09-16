@@ -82,8 +82,8 @@ jobs:
           #     direct calls to /api/auth/* (bypasses the rewrite).
           # API image needs no build args.
           build-args: |
-            ${{ matrix.component == 'web' && 'NEXT_PUBLIC_API_URL=http://homecal-api.arch.local' || '' }}
-            ${{ matrix.component == 'web' && 'NEXT_PUBLIC_AUTH_URL=http://homecal-api.arch.local' || '' }}
+            ${{ matrix.component == 'web' && 'NEXT_PUBLIC_API_URL=http://homecal-api.arch.internal' || '' }}
+            ${{ matrix.component == 'web' && 'NEXT_PUBLIC_AUTH_URL=http://homecal-api.arch.internal' || '' }}
             ${{ matrix.component == 'web' && 'API_URL=http://homecal-api' || '' }}
           # Separate cache scopes — api and web have unrelated dep trees,
           # sharing one cache would thrash constantly.

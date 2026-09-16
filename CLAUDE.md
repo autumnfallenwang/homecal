@@ -51,8 +51,8 @@ All commands run from the repo root via Turborepo:
 HomeCal runs in the home k3s cluster managed by `~/github/arch-infra` (Argo CD GitOps). Pushing to `main` triggers GHA → image build → push to `ghcr.io/autumnfallenwang/homecal-{api,web}` → arch-infra image-tag bump → Argo CD reconcile → pod roll. End-to-end deploy: ~3-5 min from `git push`.
 
 URLs (LAN-only):
-- Web: `http://homecal.arch.local`
-- API: `http://homecal-api.arch.local`
+- Web: `http://homecal.arch.internal`
+- API: `http://homecal-api.arch.internal`
 - Grafana logs: `http://grafana.arch.local` → Explore → Loki → `{namespace="homecal"}`
 - Argo CD: `http://argocd.arch.local`
 
