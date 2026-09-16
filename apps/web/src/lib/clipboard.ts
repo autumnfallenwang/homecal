@@ -1,48 +1,74 @@
 /**
- * Clipboard write with an HTTP fallback.
+ * Clipboard write with fallbacks for a plain-HTTP origin.
  *
- * `navigator.clipboard` is only defined in a secure context — HTTPS or
- * localhost. HomeCal is served over plain HTTP on the LAN
- * (http://homecal.arch.internal), so on every device except a local dev box
- * the modern API is simply absent and any call to it throws.
+ * `navigator.clipboard` only exists in a secure context — HTTPS or localhost.
+ * HomeCal is served over plain HTTP on the LAN (http://homecal.arch.internal),
+ * so on every real device the modern API is absent and a fallback is required.
  *
- * That matters most for the one-time API key reveal: if the copy silently
- * fails there, the key is unrecoverable and the service account has to be
- * re-keyed. So fall back to the legacy `execCommand("copy")` path, which
- * still works over HTTP, and report failure to the caller.
+ * This matters most for the one-time API key reveal: a silent failure there
+ * strands a key that is never shown again.
  *
- * Two traps in that fallback, both measured in a real Radix sheet:
+ * Order, and why:
  *
- *  1. The scratch <textarea> must live INSIDE the dialog. Radix traps focus,
- *     so a textarea appended to document.body has its focus pulled straight
- *     back (activeElement becomes an input in the dialog) and the selection
- *     is lost before the copy runs. Hence the `container` argument.
- *  2. `execCommand("copy")` returns `true` even when it copied nothing —
- *     it returned true in exactly the broken case above. So its return value
- *     alone is not proof; verify the textarea actually holds focus and a
- *     non-empty selection before believing it.
+ *  1. `navigator.clipboard.writeText` — secure contexts only.
+ *  2. Select the *visible* key element and copy that selection. Preferred over
+ *     a scratch textarea because the user can see the outcome: if the
+ *     programmatic copy is refused — browsers differ, and Safari is strict
+ *     about user gestures — the key is left highlighted on screen and
+ *     Ctrl/Cmd+C just works.
+ *  3. Off-screen textarea, hosted inside the nearest dialog. Radix traps
+ *     focus, so a textarea appended to document.body has its focus pulled
+ *     straight back and the selection is gone before the copy runs — measured
+ *     in a live sheet, where activeElement became an input in the dialog.
+ *
+ * `execCommand("copy")` returns `true` even when it copied nothing (it did
+ * exactly that in the broken case above), so its return value is never
+ * trusted on its own.
  */
-export async function copyText(text: string, container?: HTMLElement | null): Promise<boolean> {
-  // Preferred path — requires a secure context.
+
+/** Highlights an element's text so the user can copy it by hand. */
+export function selectElementText(el: HTMLElement | null): boolean {
+  if (!el || typeof window === "undefined") return false;
+  const sel = window.getSelection();
+  if (!sel) return false;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  sel.removeAllRanges();
+  sel.addRange(range);
+  return sel.toString().length > 0;
+}
+
+export async function copyText(text: string, el?: HTMLElement | null): Promise<boolean> {
+  // 1. Secure-context API.
   if (typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
     try {
       await navigator.clipboard.writeText(text);
       return true;
     } catch {
-      // Fall through — permission denied or blocked; try the legacy path.
+      // Permission denied or blocked — fall through.
     }
   }
 
   if (typeof document === "undefined") return false;
 
-  // Prefer the nearest dialog so a focus trap can't steal the selection.
-  // biome-ignore lint/security/noSecrets: CSS attribute selector, not a credential
-  const host = container?.closest<HTMLElement>('[role="dialog"]') ?? container ?? document.body;
+  // 2. Copy the visible element's own selection.
+  if (el && selectElementText(el)) {
+    try {
+      if (document.execCommand("copy")) {
+        const sel = window.getSelection();
+        if (sel && sel.toString().trim() === text.trim()) return true;
+      }
+    } catch {
+      // Fall through to the textarea.
+    }
+  }
 
+  // 3. Off-screen textarea, inside the dialog so a focus trap can't steal it.
+  // biome-ignore lint/security/noSecrets: CSS attribute selector, not a credential
+  const host = el?.closest<HTMLElement>('[role="dialog"]') ?? el ?? document.body;
   const ta = document.createElement("textarea");
   ta.value = text;
   ta.setAttribute("readonly", "");
-  // Off-screen but focusable — display:none or visibility:hidden break select().
   ta.style.position = "fixed";
   ta.style.top = "-1000px";
   ta.style.opacity = "0";
@@ -57,5 +83,8 @@ export async function copyText(text: string, container?: HTMLElement | null): Pr
     return false;
   } finally {
     host.removeChild(ta);
+    // Leave the visible key highlighted either way — it is the manual escape
+    // hatch, and re-selecting costs nothing.
+    selectElementText(el ?? null);
   }
 }

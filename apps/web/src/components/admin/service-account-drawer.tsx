@@ -15,7 +15,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import type { ServiceAccount, ServiceApiKey } from "@/hooks/use-service-accounts";
 import { authClient } from "@/lib/auth-client";
-import { copyText } from "@/lib/clipboard";
+import { copyText, selectElementText } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 
 interface ServiceAccountDrawerProps {
@@ -99,10 +99,11 @@ export function ServiceAccountDrawer({ service, onClose, onSaved }: ServiceAccou
   const [revealed, setRevealed] = useState<RevealedKey | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
-  // Anchor for the clipboard fallback: the scratch textarea must be created
-  // inside this dialog or Radix's focus trap reclaims focus and the copy
-  // silently copies nothing.
-  const revealRef = useRef<HTMLDivElement>(null);
+  // The visible key element. Doubles as the clipboard anchor (its nearest
+  // dialog hosts the scratch textarea, out of reach of Radix's focus trap)
+  // and as the selection target, so a refused copy still leaves the key
+  // highlighted for Ctrl/Cmd+C.
+  const revealRef = useRef<HTMLElement>(null);
 
   // Danger zone
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -143,6 +144,12 @@ export function ServiceAccountDrawer({ service, onClose, onSaved }: ServiceAccou
     }
     resetForm();
   }, [open, resetForm]);
+
+  // Highlight the key the moment it appears, so Ctrl/Cmd+C works even if the
+  // copy button's programmatic path is refused by the browser.
+  useEffect(() => {
+    if (revealed) selectElementText(revealRef.current);
+  }, [revealed]);
 
   const handleCopy = async (text: string) => {
     // Never swallow this. Over plain HTTP `navigator.clipboard` is undefined,
@@ -440,10 +447,7 @@ export function ServiceAccountDrawer({ service, onClose, onSaved }: ServiceAccou
 
               {/* Reveal-once card */}
               {revealed && (
-                <div
-                  ref={revealRef}
-                  className="rounded-lg border border-accent/40 bg-accent-soft/30 p-3"
-                >
+                <div className="rounded-lg border border-accent/40 bg-accent-soft/30 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="font-display text-xs italic text-muted-foreground">
                       New key &ldquo;{revealed.name}&rdquo; — copy it now, it won&rsquo;t be shown
@@ -465,7 +469,10 @@ export function ServiceAccountDrawer({ service, onClose, onSaved }: ServiceAccou
                         button can't reach the clipboard, selecting the key by
                         hand is the only way out — and a clipped, nowrap 67-char
                         key is effectively unselectable. */}
-                    <code className="w-full select-all break-all rounded bg-background px-2 py-1 font-mono text-xs">
+                    <code
+                      ref={revealRef}
+                      className="w-full select-all break-all rounded bg-background px-2 py-1 font-mono text-xs"
+                    >
                       {revealed.plaintext}
                     </code>
                     <Button
@@ -488,8 +495,8 @@ export function ServiceAccountDrawer({ service, onClose, onSaved }: ServiceAccou
                   </div>
                   {copyFailed && (
                     <p className="mt-2 text-xs text-destructive">
-                      Couldn&rsquo;t reach the clipboard — select the key above and copy it
-                      manually. (The browser blocks clipboard access on non-HTTPS pages.)
+                      Couldn&rsquo;t reach the clipboard — the key above is already selected, just
+                      press Ctrl/Cmd+C. (Browsers block clipboard access on non-HTTPS pages.)
                     </p>
                   )}
                 </div>
