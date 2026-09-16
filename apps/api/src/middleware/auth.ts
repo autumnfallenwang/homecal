@@ -1,5 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import type { auth } from "../auth.js";
+import { isRateLimitError } from "../lib/auth-errors.js";
 
 type Session = typeof auth.$Infer.Session;
 
@@ -15,7 +16,12 @@ export const requireAuth = createMiddleware<{
   let session: Awaited<ReturnType<typeof authInstance.api.getSession>>;
   try {
     session = await authInstance.api.getSession({ headers: c.req.raw.headers });
-  } catch {
+  } catch (err) {
+    // A quota error is not an auth failure — surface it as 429 so an
+    // exhausted key is distinguishable from an invalid one.
+    if (isRateLimitError(err)) {
+      return c.json({ error: "Too many requests", code: "RATE_LIMITED" }, 429);
+    }
     return c.json({ error: "Unauthorized" }, 401);
   }
   if (!session) {

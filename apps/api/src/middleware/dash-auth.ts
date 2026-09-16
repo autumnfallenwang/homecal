@@ -1,5 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import type { auth } from "../auth.js";
+import { isRateLimitError } from "../lib/auth-errors.js";
 
 type Session = typeof auth.$Infer.Session;
 
@@ -38,11 +39,16 @@ export const requireDashAuth = createMiddleware<{
   }
 
   // Better Auth throws `APIError` for an invalid/expired/disabled key; treat
-  // it as an auth failure rather than letting it surface as a 500.
+  // it as an auth failure rather than letting it surface as a 500. A quota
+  // error is not an auth failure though — report it as 429 so an exhausted
+  // key is distinguishable from a bad one.
   let session: Awaited<ReturnType<typeof authInstance.api.getSession>>;
   try {
     session = await authInstance.api.getSession({ headers });
-  } catch {
+  } catch (err) {
+    if (isRateLimitError(err)) {
+      return c.json({ error: "Too many requests", code: "RATE_LIMITED" }, 429);
+    }
     return c.json({ error: "Unauthorized" }, 401);
   }
   if (!session) {

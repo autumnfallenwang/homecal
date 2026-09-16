@@ -72,6 +72,17 @@ export const auth = betterAuth({
       // present so our existing `requireAuth` middleware (which delegates to
       // `auth.api.getSession`) accepts API keys end-to-end.
       enableSessionForAPIKeys: true,
+      // Per-key rate limiting off. The plugin defaults to 10 requests per 24h,
+      // which silently bricked the Kindle wall display after ~100 minutes of
+      // polling — and because the plugin raises an APIError that we can only
+      // read as an auth failure, it surfaced as 401 Unauthorized rather than
+      // announcing itself as a throttle.
+      //
+      // `/api/*` already has a properly calibrated limiter (600/min, keyed per
+      // api-key / user / IP, emitting draft-7 RateLimit-* headers and a real
+      // 429) — see middleware/rate-limit.ts. Two overlapping limiters only
+      // means one of them surprises you; keep the one that reports itself.
+      rateLimit: { enabled: false },
     }),
   ],
   databaseHooks: {
