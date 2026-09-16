@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy, KeyRound, Loader2, RotateCw, TerminalSquare, X } from "lucide-react";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -99,6 +99,10 @@ export function ServiceAccountDrawer({ service, onClose, onSaved }: ServiceAccou
   const [revealed, setRevealed] = useState<RevealedKey | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
+  // Anchor for the clipboard fallback: the scratch textarea must be created
+  // inside this dialog or Radix's focus trap reclaims focus and the copy
+  // silently copies nothing.
+  const revealRef = useRef<HTMLDivElement>(null);
 
   // Danger zone
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -144,7 +148,7 @@ export function ServiceAccountDrawer({ service, onClose, onSaved }: ServiceAccou
     // Never swallow this. Over plain HTTP `navigator.clipboard` is undefined,
     // and a silent failure here strands a one-time key the user can't read
     // back — forcing them to re-mint without knowing why.
-    const ok = await copyText(text);
+    const ok = await copyText(text, revealRef.current);
     setCopyFailed(!ok);
     if (ok) {
       setCopied(true);
@@ -436,7 +440,10 @@ export function ServiceAccountDrawer({ service, onClose, onSaved }: ServiceAccou
 
               {/* Reveal-once card */}
               {revealed && (
-                <div className="rounded-lg border border-accent/40 bg-accent-soft/30 p-3">
+                <div
+                  ref={revealRef}
+                  className="rounded-lg border border-accent/40 bg-accent-soft/30 p-3"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <div className="font-display text-xs italic text-muted-foreground">
                       New key &ldquo;{revealed.name}&rdquo; — copy it now, it won&rsquo;t be shown
