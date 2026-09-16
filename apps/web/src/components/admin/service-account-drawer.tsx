@@ -15,6 +15,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import type { ServiceAccount, ServiceApiKey } from "@/hooks/use-service-accounts";
 import { authClient } from "@/lib/auth-client";
+import { copyText } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 
 interface ServiceAccountDrawerProps {
@@ -97,6 +98,7 @@ export function ServiceAccountDrawer({ service, onClose, onSaved }: ServiceAccou
   const [busyKeyId, setBusyKeyId] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<RevealedKey | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
 
   // Danger zone
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -120,6 +122,7 @@ export function ServiceAccountDrawer({ service, onClose, onSaved }: ServiceAccou
     }
     setRevealed(null);
     setCopied(false);
+    setCopyFailed(false);
     setShowMintForm(false);
     setMintName("");
     setMintExpiry("never");
@@ -138,12 +141,14 @@ export function ServiceAccountDrawer({ service, onClose, onSaved }: ServiceAccou
   }, [open, resetForm]);
 
   const handleCopy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
+    // Never swallow this. Over plain HTTP `navigator.clipboard` is undefined,
+    // and a silent failure here strands a one-time key the user can't read
+    // back — forcing them to re-mint without knowing why.
+    const ok = await copyText(text);
+    setCopyFailed(!ok);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* ignore */
     }
   };
 
@@ -448,8 +453,12 @@ export function ServiceAccountDrawer({ service, onClose, onSaved }: ServiceAccou
                       <X className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <code className="truncate rounded bg-background px-2 py-1 font-mono text-xs">
+                  <div className="mt-2 flex items-start justify-between gap-2">
+                    {/* `select-all` + wrapping, not `truncate`: if the copy
+                        button can't reach the clipboard, selecting the key by
+                        hand is the only way out — and a clipped, nowrap 67-char
+                        key is effectively unselectable. */}
+                    <code className="w-full select-all break-all rounded bg-background px-2 py-1 font-mono text-xs">
                       {revealed.plaintext}
                     </code>
                     <Button
@@ -470,6 +479,12 @@ export function ServiceAccountDrawer({ service, onClose, onSaved }: ServiceAccou
                       )}
                     </Button>
                   </div>
+                  {copyFailed && (
+                    <p className="mt-2 text-xs text-destructive">
+                      Couldn&rsquo;t reach the clipboard — select the key above and copy it
+                      manually. (The browser blocks clipboard access on non-HTTPS pages.)
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -694,12 +709,18 @@ export function ServiceAccountDrawer({ service, onClose, onSaved }: ServiceAccou
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="mt-auto flex justify-end gap-2 border-t border-rule pt-4">
+            {/* While a one-time key is on screen, "Done" is the only sensible
+                action — the key is already persisted, so offering "Save
+                changes" next to it reads as though the key still needs saving.
+                Matches member-drawer's temp-password behaviour. */}
             <Button type="button" variant="outline" onClick={onClose}>
               {revealed ? "Done" : "Cancel"}
             </Button>
-            <Button type="submit" disabled={saving} className="rounded-full px-5">
-              {submitLabel}
-            </Button>
+            {!revealed && (
+              <Button type="submit" disabled={saving} className="rounded-full px-5">
+                {submitLabel}
+              </Button>
+            )}
           </div>
         </form>
       </SheetContent>

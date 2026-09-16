@@ -40,16 +40,16 @@ export const auth = betterAuth({
     database: {
       generateId: false, // PostgreSQL generates UUIDs
     },
-    // Phase 19 — k3s cutover uses two ingresses: homecal.arch.local (web) +
-    // homecal-api.arch.local (api). Better Auth client (auth-client.ts) calls
+    // Phase 19 — k3s cutover uses two ingresses: homecal.arch.internal (web) +
+    // homecal-api.arch.internal (api). Better Auth client (auth-client.ts) calls
     // /api/auth/* directly against the API host, so the session cookie defaults
     // to that subdomain — and isn't sent when the browser hits the web host
-    // for /api/events etc. Setting Domain=.arch.local makes the cookie travel
+    // for /api/events etc. Setting Domain=.arch.internal makes the cookie travel
     // to both subdomains. LAN-only cluster; no cross-tenant concern.
     //
-    // Only applied when COOKIE_DOMAIN is set (the chart sets it to .arch.local in
+    // Only applied when COOKIE_DOMAIN is set (the chart sets it to .arch.internal in
     // the cluster). In local dev it's unset, so cookies stay host-scoped to
-    // localhost — a Domain=.arch.local cookie is invalid for localhost and the
+    // localhost — a Domain=.arch.internal cookie is invalid for localhost and the
     // browser silently drops it, which looks like "sign-in 200 then 401 on every
     // protected request".
     ...(process.env.COOKIE_DOMAIN?.trim()

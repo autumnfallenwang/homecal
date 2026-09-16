@@ -21,8 +21,8 @@ RUN pnpm install --frozen-lockfile
 # Build Next.js with standalone output.
 # NEXT_PUBLIC_* vars are inlined into the client bundle at build time. The
 # GHA workflow passes --build-arg for both:
-#   NEXT_PUBLIC_API_URL=http://homecal-api.arch.local  (rewrite proxy fallback)
-#   NEXT_PUBLIC_AUTH_URL=http://homecal-api.arch.local (Better Auth client baseURL)
+#   NEXT_PUBLIC_API_URL=http://homecal-api.arch.internal  (rewrite proxy fallback)
+#   NEXT_PUBLIC_AUTH_URL=http://homecal-api.arch.internal (Better Auth client baseURL)
 # Runtime-overrideable API_URL (not NEXT_PUBLIC_*) is set in the chart env so
 # the SSR rewrite proxy uses cluster Service DNS — see next.config.ts.
 ARG NEXT_PUBLIC_API_URL=http://localhost:51001
