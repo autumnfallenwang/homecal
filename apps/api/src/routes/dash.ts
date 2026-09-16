@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { auth } from "../auth.js";
 import { requireDashAuth } from "../middleware/dash-auth.js";
-import { renderDashPage } from "../services/dash.js";
+import { renderDashError, renderDashPage } from "../services/dash.js";
 import { buildTodayDigestEvents } from "../services/digest-scheduler.js";
 import { getOrCreateDigestSettings } from "../services/digest-settings.js";
 
@@ -42,7 +42,10 @@ const dashQuerySchema = z.object({
 dashApp.get("/", async (c) => {
   const parsed = dashQuerySchema.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
   if (!parsed.success) {
-    return c.json({ error: "Validation failed", details: parsed.error.issues }, 400);
+    // HTML, not JSON: a bad query param must not strand the display on a
+    // page that cannot refresh itself.
+    c.header("Cache-Control", "no-store");
+    return c.html(renderDashError({ status: 400, message: "Invalid dashboard settings" }), 400);
   }
 
   const settings = await getOrCreateDigestSettings();

@@ -91,7 +91,27 @@ describe("GET /api/v1/dash — auth boundary", () => {
   it("returns 401 with no credentials at all", async () => {
     const res = await req("/api/v1/dash");
     expect(res.status).toBe(401);
-    await expect(res.json()).resolves.toEqual({ error: "Unauthorized" });
+  });
+
+  // The wall display can only recover from a failure if the failure page
+  // retries itself. A JSON body has no meta refresh, so the device would sit
+  // on a dead page indefinitely — which is exactly what happened in the field
+  // when an exhausted key returned {"error":"Unauthorized"}.
+  it("renders errors as self-retrying HTML, never as a dead JSON page", async () => {
+    for (const path of ["/api/v1/dash", "/api/v1/dash?key=hc_nope"]) {
+      const res = await req(path);
+      expect(res.status).toBe(401);
+      expect(res.headers.get("content-type")).toContain("text/html");
+      const html = await res.text();
+      expect(html).toContain('http-equiv="refresh"');
+      expect(html).toContain("HOMECAL");
+      expect(html).not.toContain('{"error"');
+    }
+  });
+
+  it("marks error pages no-store so a failure is never cached", async () => {
+    const res = await req("/api/v1/dash");
+    expect(res.headers.get("cache-control")).toContain("no-store");
   });
 
   it("returns 401 for a well-formed but unknown key", async () => {
@@ -132,8 +152,9 @@ describe("GET /api/v1/dash — query validation", () => {
     const cookie = await createUser("Alice", "alice@example.com");
     const res = await req("/api/v1/dash?tz=Not/AZone", { headers: { Cookie: cookie } });
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toBe("Validation failed");
+    // Also HTML + retry: a bad query param must not strand the display.
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(await res.text()).toContain('http-equiv="refresh"');
   });
 
   it("rejects a refresh interval above the cap with 400", async () => {

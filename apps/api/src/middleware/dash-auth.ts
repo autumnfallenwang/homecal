@@ -1,6 +1,9 @@
+import type { Context } from "hono";
 import { createMiddleware } from "hono/factory";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { auth } from "../auth.js";
 import { isRateLimitError } from "../lib/auth-errors.js";
+import { renderDashError } from "../services/dash.js";
 
 type Session = typeof auth.$Infer.Session;
 
@@ -25,6 +28,16 @@ type Session = typeof auth.$Infer.Session;
  * Use a dedicated service account for the display and revoke it if the device
  * is lost. Cookie and bearer auth still work here unchanged.
  */
+/**
+ * Fail as HTML that retries itself. A JSON body would strand the wall display
+ * on a dead page — it carries no meta refresh, so the device never asks
+ * again and only a manual tap recovers it. Observed in the field.
+ */
+function dashError(c: Context, status: ContentfulStatusCode, message: string) {
+  c.header("Cache-Control", "no-store");
+  return c.html(renderDashError({ status, message }), status);
+}
+
 export const requireDashAuth = createMiddleware<{
   // biome-ignore lint/style/useNamingConvention: Hono middleware Variables convention
   Variables: { user: Session["user"]; session: Session["session"] };
@@ -47,12 +60,12 @@ export const requireDashAuth = createMiddleware<{
     session = await authInstance.api.getSession({ headers });
   } catch (err) {
     if (isRateLimitError(err)) {
-      return c.json({ error: "Too many requests", code: "RATE_LIMITED" }, 429);
+      return dashError(c, 429, "Too many requests");
     }
-    return c.json({ error: "Unauthorized" }, 401);
+    return dashError(c, 401, "Not authorised");
   }
   if (!session) {
-    return c.json({ error: "Unauthorized" }, 401);
+    return dashError(c, 401, "Not authorised");
   }
 
   c.set("user", session.user);

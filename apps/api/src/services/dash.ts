@@ -151,3 +151,52 @@ ${refreshTag}
 </body>
 </html>`;
 }
+
+/**
+ * Error page for the dashboard, rendered as HTML with the same meta refresh
+ * as the normal view.
+ *
+ * This exists because a JSON error body is a dead end on an unattended
+ * display: it carries no refresh tag, so the device sits on it forever and
+ * only a human walking over and tapping reload recovers the screen. That
+ * happened in the field — an exhausted API key returned `{"error":...}` and
+ * the wall showed it for hours after the server was healthy again.
+ *
+ * Any failure the Kindle can reach must therefore retry itself. Retry faster
+ * than the normal refresh, since the goal is to recover quickly rather than
+ * to conserve e-ink redraws.
+ */
+export function renderDashError(opts: {
+  status: number;
+  message: string;
+  retrySeconds?: number;
+}): string {
+  const { status, message, retrySeconds = 60 } = opts;
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="${retrySeconds}">
+<title>HomeCal — unavailable</title>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; background:#fff; color:#000;
+         font-family:Helvetica,Arial,sans-serif; }
+  .wrap { max-width:618px; margin:0 auto; padding:14px 16px; }
+  .brand { font-size:12px; letter-spacing:4px; border-bottom:3px solid #000;
+           padding-bottom:8px; }
+  h1 { font-size:26px; margin:18px 0 6px; }
+  p { font-size:15px; color:#555; margin:4px 0; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">HOMECAL</div>
+    <h1>Can&rsquo;t load the calendar</h1>
+    <p>${escapeHtml(message)} (${status})</p>
+    <p>Retrying every ${retrySeconds}s — no action needed.</p>
+  </div>
+</body>
+</html>`;
+}
