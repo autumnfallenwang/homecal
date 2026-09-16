@@ -7,6 +7,7 @@ import { requestLog } from "./middleware/request-log.js";
 import { getOpenApiSpec } from "./openapi/spec.js";
 import { swaggerUiHtml } from "./openapi/swagger-ui.html.js";
 import { adminApp } from "./routes/admin.js";
+import { dashApp } from "./routes/dash.js";
 import { devicesApp } from "./routes/devices.js";
 import { eventsApp } from "./routes/events.js";
 import { holidaysApp } from "./routes/holidays.js";
@@ -92,6 +93,7 @@ for (const prefix of apiPrefixes) {
   app.route(`${prefix}/devices`, devicesApp);
   app.route(`${prefix}/admin`, adminApp);
   app.route(`${prefix}/holidays`, holidaysApp);
+  app.route(`${prefix}/dash`, dashApp);
 }
 
 // Example protected route (used by integration tests)
