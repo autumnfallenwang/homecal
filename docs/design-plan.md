@@ -467,7 +467,7 @@ Why not a ribbon/pill: too AI-default. Italic kicker + terracotta dot is typogra
 
 ### Phase 19 — k3s migration (web + API + DB, iOS deferred)
 
-Move HomeCal off the single-host `docker compose` stack onto the home k3s cluster managed by `arch-infra` (Argo CD GitOps). Follows the playbook validated on llmgw (2026-05) and homenews (Phase 17). **Scope: web + API + DB only.** iOS app deliberately left to break post-cutover — `LocalConfig.swift` update is a separate follow-up once `*.arch.local` DNS resolves on the device.
+Move HomeCal off the single-host `docker compose` stack onto the home k3s cluster managed by `arch-infra` (Argo CD GitOps). Follows the playbook validated on llmgw (2026-05) and homenews (Phase 17). **Scope: web + API + DB only.** iOS app deliberately left to break post-cutover — `LocalConfig.swift` update is a separate follow-up. (Unblocked 2026-09: the cluster moved to `*.arch.internal`, served from the router's DNS table, so the names now resolve on-device without a hosts file.)
 
 **Why now**:
 - HomeCal is the last app on docker-compose-on-host; llmgw + homenews already migrated.
@@ -483,8 +483,8 @@ namespace: homecal
 ├── job/homecal-migrate           Helm pre-install/pre-upgrade hook, drizzle-kit migrate
 ├── secret/homecal-secrets        BETTER_AUTH_SECRET, EMAIL_PASSWORD, APNS_PRIVATE_KEY, POSTGRES_PASSWORD (manual)
 ├── service/homecal-{db,api,web}  ClusterIP (db is headless)
-├── ingress/homecal-web           Traefik, host homecal.arch.local
-└── ingress/homecal-api           Traefik, host homecal-api.arch.local
+├── ingress/homecal-web           Traefik, host homecal.arch.internal
+└── ingress/homecal-api           Traefik, host homecal-api.arch.internal
 ```
 
 **Key decisions** (locked):
@@ -495,7 +495,7 @@ namespace: homecal
 - **`drizzle-kit migrate` going forward, not `push`** — push was the root cause of the historical orphaned-sessions/wiped-users mystery in the prod DB. Switch dev workflow and adopt a Helm pre-install Job for the cluster.
 - **Adopt pino + request-log middleware** — homenews's logger contract was explicitly designed to be portable to homecal. Without it, Loki queries can only regex; with it, `{namespace="homecal", service="homecal-api"} | json | level="error"` works day one.
 - **Preserve DB name `homecal_prod` and password `homecal_prod`** — keeps the pg_dump/restore trivial; rename is a separate follow-up if ever needed.
-- **`BETTER_AUTH_URL=http://homecal-api.arch.local`** — Better Auth's `/api/auth/*` lives on the API host.
+- **`BETTER_AUTH_URL=http://homecal-api.arch.internal`** — Better Auth's `/api/auth/*` lives on the API host.
 - **iOS out-of-scope** — accept the break, update `LocalConfig.swift` later.
 
 **Full plan**: see [phase19-k3s-migration-memo.md](phase19-k3s-migration-memo.md) for the 41-task breakdown (84–124) across phases A (code touchups + logging), B (Helm chart), C (Dockerfiles), D (CI), E (arch-infra registration), F (secrets), R (runbook), G (data migration), H (cutover), I (cleanup). Also includes the cross-namespace Service DNS map, securityContext placement rules (pod-level vs container-level), and the post-restore `__drizzle_migrations` bootstrap (since the source DB never had a migrations table).
@@ -550,7 +550,7 @@ An admin-configured email that summarizes the day's family calendar and lands in
 - Weekly / monthly digests; a "skip days with no events" toggle.
 
 ### Backlog — Future Enhancements (deferred)
-- iOS LocalConfig.swift update post Phase-19 cutover — point at homecal-api.arch.local; requires LAN DNS resolution on device
+- iOS LocalConfig.swift update post Phase-19 cutover — point at homecal-api.arch.internal; requires LAN DNS resolution on device
 - Sealed Secrets bootstrap — encrypt secrets at rest in arch-infra (no-downtime env source swap once operator is installed)
 - iOS push via APNs — enable when Apple Developer account is available
 - Web Push notifications — Service Worker + Web Push API (add if users want desktop alerts)

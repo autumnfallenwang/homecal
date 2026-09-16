@@ -53,8 +53,8 @@ HomeCal runs in the home k3s cluster managed by `~/github/arch-infra` (Argo CD G
 URLs (LAN-only):
 - Web: `http://homecal.arch.internal`
 - API: `http://homecal-api.arch.internal`
-- Grafana logs: `http://grafana.arch.local` → Explore → Loki → `{namespace="homecal"}`
-- Argo CD: `http://argocd.arch.local`
+- Grafana logs: `http://grafana.arch.internal` → Explore → Loki → `{namespace="homecal"}`
+- Argo CD: `http://argocd.arch.internal`
 
 Common ops:
 
@@ -63,7 +63,7 @@ Common ops:
 kubectl logs -n homecal deploy/homecal-api -f
 
 # Loki history (30d retention)
-curl -sG http://loki.arch.local/loki/api/v1/query_range \
+curl -sG http://loki.arch.internal/loki/api/v1/query_range \
   --data-urlencode 'query={namespace="homecal"} | json | event="reminder.dispatch.email"' \
   --data-urlencode "start=$(date -u -d '-1 hour' +%s)000000000" \
   --data-urlencode "end=$(date -u +%s)000000000"
@@ -86,7 +86,7 @@ Secrets (`homecal-secrets` k8s Secret, namespace `homecal`):
 
 ### Dev vs Prod
 
-- **Dev**: feature branches, `pnpm dev`, dev DB on port 5432, hot reload. `apps/api/.env` holds dev DATABASE_URL + LLM_GATEWAY_URL=http://llmgw.arch.local
+- **Dev**: feature branches, `pnpm dev`, dev DB on port 5432, hot reload. `apps/api/.env` holds dev DATABASE_URL + LLM_GATEWAY_URL=http://llmgw.arch.internal
 - **Prod**: main branch, k3s cluster, cluster DB on port 5432 in-cluster
 - **Deploy**: merge to main → GHA builds + pushes images + bumps arch-infra → Argo CD applies
 - **Migrations**: SQL files in `apps/api/drizzle/`, applied via `pnpm --filter @homecal/api db:migrate` (dev) or the Helm pre-install Job (cluster, flip `migrate.enabled=true` in arch-infra to activate). Generate new ones with `db:generate` after editing `db/schema.ts`. Additive-only — never delete/rename columns. Do NOT use `drizzle-kit push` — destructive, doesn't track applied migrations (deprecated in Phase 19)

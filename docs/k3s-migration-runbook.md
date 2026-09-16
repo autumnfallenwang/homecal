@@ -15,7 +15,7 @@ Step-by-step cutover from docker-compose to the home k3s cluster. Run this end-t
 [ ] D2 done — both ghcr.io/autumnfallenwang/homecal-{api,web} packages flipped to public
 [ ] F1 done — homecal-secrets Secret exists in cluster (see § F1 below)
 [ ] E1 done — apps/homecal.yaml committed + pushed to arch-infra
-[ ] DNS — homecal.arch.local + homecal-api.arch.local resolve on the workstation (`getent hosts homecal.arch.local`)
+[ ] DNS — homecal.arch.internal + homecal-api.arch.internal resolve on the workstation (`getent hosts homecal.arch.internal`)
 [ ] Source DB row counts recorded (G1 baseline)
 [ ] All workstation tabs/sessions logged out (cookie domain changes; old sessions become invalid)
 ```
@@ -247,18 +247,21 @@ kubectl -n homecal exec homecal-db-0 -- \
 ## H1 — DNS pre-flight
 
 ```bash
-getent hosts homecal.arch.local
-getent hosts homecal-api.arch.local
+getent hosts homecal.arch.internal
+getent hosts homecal-api.arch.internal
 # Both should resolve to 192.168.1.163 (the cluster node).
 ```
 
-If they don't resolve, add to `/etc/hosts` on the workstation:
+If they don't resolve, add them to the router's DNS table
+(Advanced -> Network Settings -> DNS Server), each pointing at `192.168.1.163`.
+Every device on the LAN picks them up over DHCP with no per-device setup.
 
-```bash
-echo "192.168.1.163  homecal.arch.local homecal-api.arch.local" | sudo tee -a /etc/hosts
-```
-
-(If you have router-level DNS for `*.arch.local`, it's already handled.)
+Do **not** fall back to `/etc/hosts`: that has to be repeated on every machine,
+and is impossible on devices that have no hosts file at all (the wall-mounted
+Kindle, phones, tablets). Hosts entries were only ever needed because the old
+`.arch.local` names could not be served by a normal DNS server — `.local` is
+reserved for mDNS (RFC 6762), so macOS, iOS and Linux intercept those lookups
+and never ask a unicast resolver.
 
 ---
 
@@ -271,10 +274,10 @@ kubectl -n homecal get pod
 kubectl -n homecal rollout status deploy/homecal-api
 kubectl -n homecal rollout status deploy/homecal-web
 
-curl -fsS http://homecal-api.arch.local/health
+curl -fsS http://homecal-api.arch.internal/health
 # Expect: {"status":"ok"}
 
-curl -sS -o /dev/null -w "homecal web → HTTP %{http_code}\n" http://homecal.arch.local/
+curl -sS -o /dev/null -w "homecal web → HTTP %{http_code}\n" http://homecal.arch.internal/
 # Expect: HTTP 200
 
 # Argo CD status
@@ -297,11 +300,11 @@ ss -tlnp | grep ':51432' && echo "WARN: port still bound" || echo "OK: 51432 fre
 
 ## H4 — Smoke test: auth + events + holidays
 
-Open `http://homecal.arch.local` in a browser.
+Open `http://homecal.arch.internal` in a browser.
 
 1. Login page renders.
 2. Sign in as Aaron (existing credentials — passwords survived restore).
-3. Expect: re-login was required because cookie domain changed from `192.168.1.163` → `homecal.arch.local`. The 9 prior sessions are now invalid; that's expected.
+3. Expect: re-login was required because cookie domain changed from `192.168.1.163` → `homecal.arch.internal`. The 9 prior sessions are now invalid; that's expected.
 4. Calendar should show **~124 existing events** across the recent date range with correct assignees + colors.
 5. Open an event with reminders → activity log + reminders render.
 6. Holidays show as Fraunces italic kicker lines above date numerals (if user has country set).
@@ -315,7 +318,7 @@ Quick API spot-check via curl (use a session cookie from the browser):
 ```bash
 COOKIE=<from devtools>
 curl -sS -H "Cookie: better-auth.session_token=$COOKIE" \
-  http://homecal-api.arch.local/api/v1/users | jq .
+  http://homecal-api.arch.internal/api/v1/users | jq .
 ```
 
 ---
@@ -364,7 +367,7 @@ kubectl -n homecal exec homecal-db-0 -- psql -U homecal -d homecal_prod -c \
 Or via curl:
 
 ```bash
-curl -sG http://loki.arch.local/loki/api/v1/query_range \
+curl -sG http://loki.arch.internal/loki/api/v1/query_range \
   --data-urlencode 'query={namespace="homecal", service="homecal-api"} | json | event="http.request"' \
   --data-urlencode "start=$(date -u -d '-5 min' +%s)000000000" \
   --data-urlencode "end=$(date -u +%s)000000000" | jq '.data.result | length'
@@ -379,7 +382,7 @@ curl -sG http://loki.arch.local/loki/api/v1/query_range \
 # Hit /api/v1/users 150 times rapid-fire (default limit is 600/min, but 150 in <1s
 # usually triggers per-second burst limit when key is anon).
 for i in $(seq 1 150); do
-  curl -sS -o /dev/null -w "%{http_code}\n" http://homecal-api.arch.local/api/v1/users
+  curl -sS -o /dev/null -w "%{http_code}\n" http://homecal-api.arch.internal/api/v1/users
 done | sort | uniq -c
 # Expect: a mix of 401s (no auth) and 429s once rate limit kicks in.
 ```
@@ -400,7 +403,7 @@ kubectl -n homecal exec deploy/homecal-api -- wget -qO- --timeout=5 http://llmgw
 # Expect: some response (200 OK or a JSON body).
 ```
 
-Then from the UI: open homecal.arch.local → Quick Add (the `+` button) → text input "dentist appointment tomorrow at 3pm" → expect event form pre-fills with parsed title + ISO times.
+Then from the UI: open homecal.arch.internal → Quick Add (the `+` button) → text input "dentist appointment tomorrow at 3pm" → expect event form pre-fills with parsed title + ISO times.
 
 Logs:
 
