@@ -56,6 +56,61 @@ function stamp(instant: Date, tz: string): string {
   return `${hour12}:${m.toString().padStart(2, "0")}${suffix}`;
 }
 
+/**
+ * Refresh markup for an unattended display.
+ *
+ * `<meta http-equiv="refresh">` performs a *navigation*. If the server is
+ * unreachable when it fires, the browser discards our page and shows its own
+ * network-error page — which carries no refresh of its own. The display is
+ * then stranded until a human taps reload. Observed in the field: the k3s
+ * host rebooted, the Kindle's next refresh hit ERR_ADDRESS_UNREACHABLE, and
+ * it sat on Chrome's error page for the next hour while the server was
+ * healthy again within minutes.
+ *
+ * Note the earlier `renderDashError` fix cannot help there: a network-layer
+ * failure never reaches our code, so we never get to render anything.
+ *
+ * So poll with `fetch` instead and only navigate once we know the server is
+ * answering. A failed poll is caught and ignored, leaving the last good
+ * render on screen, and the next tick tries again — the page never leaves,
+ * so it can always recover on its own.
+ *
+ * The `<noscript>` meta is the fallback for a browser with JS disabled, where
+ * a navigating refresh is better than none. Measured on the target device:
+ * `fetch` and `Promise` are both present.
+ */
+function refreshMarkup(seconds: number): { head: string; script: string } {
+  if (seconds <= 0) return { head: "", script: "" };
+  const ms = seconds * 1000;
+  // Retry sooner than the normal cadence while the server is unreachable, so
+  // an outage clears quickly once it ends.
+  const failMs = Math.min(ms, 60_000);
+
+  // A 4xx/5xx still means the server is answering, so reloading is safe there
+  // and lands on our own self-retrying error page rather than the browser's.
+  // Only a thrown fetch — the server being unreachable — must avoid
+  // navigating, since that is what strands the display.
+  // biome-ignore lint/security/noSecrets: inline browser script, not a credential
+  const script = `<script>(function(){
+var okMs=${ms},failMs=${failMs},t;
+function schedule(d){clearTimeout(t);t=setTimeout(tick,d);}
+function tick(){
+try{
+fetch(location.href,{cache:'no-store'}).then(function(r){
+if(r&&(r.ok||r.status>=400)){location.reload();return;}
+schedule(failMs);
+})['catch'](function(){schedule(failMs);});
+}catch(e){schedule(failMs);}
+}
+schedule(okMs);
+})();</script>`;
+
+  return {
+    head: `<noscript><meta http-equiv="refresh" content="${seconds}"></noscript>`,
+    script,
+  };
+}
+
 export function renderDashPage(opts: {
   events: DigestEventInput[];
   tz: string;
@@ -100,15 +155,14 @@ export function renderDashPage(opts: {
       ? `<div class="empty">Nothing on the calendar today.</div>`
       : rows + (overflow > 0 ? `<div class="more">+${overflow} more</div>` : "");
 
-  const refreshTag =
-    refreshSeconds > 0 ? `<meta http-equiv="refresh" content="${refreshSeconds}">` : "";
+  const refresh = refreshMarkup(refreshSeconds);
 
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-${refreshTag}
+${refresh.head}
 <title>HomeCal — ${weekday}</title>
 <style>
   * { box-sizing:border-box; }
@@ -148,6 +202,7 @@ ${refreshTag}
     </div>
     ${body}
   </div>
+  ${refresh.script}
 </body>
 </html>`;
 }
@@ -172,12 +227,13 @@ export function renderDashError(opts: {
   retrySeconds?: number;
 }): string {
   const { status, message, retrySeconds = 60 } = opts;
+  const errRefresh = refreshMarkup(retrySeconds);
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="${retrySeconds}">
+${errRefresh.head}
 <title>HomeCal — unavailable</title>
 <style>
   * { box-sizing:border-box; }
@@ -197,6 +253,7 @@ export function renderDashError(opts: {
     <p>${escapeHtml(message)} (${status})</p>
     <p>Retrying every ${retrySeconds}s — no action needed.</p>
   </div>
+  ${errRefresh.script}
 </body>
 </html>`;
 }

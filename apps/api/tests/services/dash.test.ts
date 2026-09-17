@@ -93,19 +93,38 @@ describe("renderDashPage", () => {
     expect(html.match(/class="ev past"/g)).toHaveLength(1);
   });
 
-  it("emits a meta refresh at the requested interval", () => {
+  it("polls with fetch rather than a navigating meta refresh", () => {
+    // A navigating <meta refresh> is a one-way trip on an unattended display:
+    // if the server is unreachable when it fires, the browser replaces our
+    // page with its own error page, which has no refresh and never retries.
+    // Observed in the field after a host reboot. So the only navigating
+    // refresh allowed is inside <noscript>.
     const html = renderDashPage({ events: [], tz: "UTC", now, refreshSeconds: 900 });
-    expect(html).toContain('<meta http-equiv="refresh" content="900">');
+    const outsideNoscript = html.replace(/<noscript>[\s\S]*?<\/noscript>/g, "");
+    expect(outsideNoscript).not.toContain('http-equiv="refresh"');
+    // biome-ignore lint/security/noSecrets: markup assertion, not a credential
+    expect(html).toContain('<noscript><meta http-equiv="refresh" content="900"></noscript>');
+    expect(html).toContain("fetch(location.href");
+    expect(html).toContain("900000");
   });
 
-  it("omits the meta refresh entirely when the interval is zero", () => {
+  it("retries faster than the normal cadence while the server is unreachable", () => {
+    const html = renderDashPage({ events: [], tz: "UTC", now, refreshSeconds: 900 });
+    // okMs = 900s, failMs capped at 60s so an outage clears quickly.
+    // biome-ignore lint/security/noSecrets: markup assertion, not a credential
+    expect(html).toContain("failMs=60000");
+  });
+
+  it("omits all refresh machinery when the interval is zero", () => {
     const html = renderDashPage({ events: [], tz: "UTC", now, refreshSeconds: 0 });
     expect(html).not.toContain('http-equiv="refresh"');
+    expect(html).not.toContain("fetch(location.href");
   });
 
   it("defaults to a ten-minute refresh", () => {
     const html = renderDashPage({ events: [], tz: "UTC", now });
     expect(html).toContain('content="600"');
+    expect(html).toContain("okMs=600000");
   });
 
   it("shows an empty-day message when there is nothing on", () => {
