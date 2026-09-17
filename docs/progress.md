@@ -322,6 +322,21 @@ Cutover completed 2026-05-27. HomeCal moved off the single-host docker-compose s
 | 132 | HTML email template | ✅ Done | `renderDigestHtml()` in `services/digest.ts` — email-safe (tables + inline styles + hex, Georgia serif) matching the approved mockup; masthead + serif date + count pill + per-event time/title/location/colored-dot assignees; HTML-escaped, hex-only color guard. `sendMail`/`sendDigestEmail` send `html` alongside the plain-text fallback; `dispatchDigest` builds both. Unit tests (content, escaping, empty-day, color guard) pass; integration asserts html passed |
 | 133 | Printable digest page | ✅ Done | "Print" button on the Notifications tab → `GET /api/admin/digest/print` (admin-gated) opens a standalone page of today's digest that auto-opens the print dialog (`@media print` hides its toolbar). Shares the email card (`renderDigestCardHtml`) + `buildTodayDigestEvents`. Verified: 200 `text/html` with today's events + `window.print()`; unit + integration (403/401 gates) tests |
 
+### Phase 22 — E-ink wall dashboard (Kindle) + LAN DNS migration
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 134 | Device feasibility probe | ✅ Done | 5-page probe served over LAN, read on a Kindle Paperwhite 11th gen. Measured, not assumed: CSS viewport **618×716 @ DPR 2**; `fetch`/`Promise`/flex/grid all present; the digest palette's `#be5a24` accent and `#7a6f5c` muted wash out at 1m (only pure mono survives at 2m); per-member colour dots are indistinguishable in greyscale; **the browser's JS clock reports UTC regardless of device timezone**; `<meta http-equiv="refresh">` fires unattended |
+| 135 | Sleep/lockscreen investigation | ✅ Done | Stock device locks after exactly **599.4s** and `~ds` is removed on 5.19.2. Root (Véra jailbreak, PW5 on 5.17.1.0.3) → `lipc-set-prop com.lab126.powerd preventScreenSaver 1` + `disableScreenOff 1` holds the screen indefinitely. Measured over 72 min with zero refresh anomalies. **Runtime-only — does not survive reboot** (boot hook deferred, see What's Next) |
+| 136 | `/dash` route | ✅ Done | `GET /api/{,v1/}dash` → `services/dash.ts` renders a self-contained greyscale page built to the measurements above: 618px, mono only (`#000`/`#fff`/`#555`), **boxed initials instead of colour dots**, times formatted **server-side** from an explicit `tz` (query param, else digest settings) so nothing depends on the client clock, `?refresh=` seconds (default 600), `as of <time>` staleness stamp. Private events excluded — renders with no requester identity, same rule as the digest |
+| 137 | URL-token auth | ✅ Done | `middleware/dash-auth.ts` — `requireAuth` plus an `hc_` key accepted as `?key=`, since an e-reader can only supply a URL. Key issuance/revocation stay in the existing service-account flow. Trade-off recorded in-file: a secret in a URL is weaker than a header; `requestLog` records `c.req.path` (query excluded) so it does not reach our logs — **verified against a live run, 0 occurrences** |
+| 138 | Per-key rate limit + 429 mapping | ✅ Done | Better Auth's apiKey plugin defaults to **10 requests/24h** — the display exhausted it in ~100 min and then failed permanently, reported as **401**. Disabled per-key limiting (`/api/*` already does 600/min, keyed per api-key/user/IP, with draft-7 `RateLimit-*` headers and a real 429). Added `lib/auth-errors.ts` so a quota error maps to **429 + `RATE_LIMITED`** in both `requireAuth` and `requireDashAuth`; an invalid key still returns 401 |
+| 139 | Self-retrying error page | ✅ Done | A failing `/dash` returned JSON, which carries no meta refresh — the wall sat on a dead page for hours after the server recovered, and only a manual tap fixed it. `renderDashError()` now serves **HTML with a 60s refresh** for 401/429 and query-validation 400s, all `Cache-Control: no-store`. Tests assert errors are `text/html`, contain a refresh tag, and never contain a JSON error body |
+| 140 | Clipboard fix (minted key unreachable) | ✅ Done | `navigator.clipboard` is secure-context-only, so the one-time key reveal could not be copied on plain HTTP, and a bare `catch {}` hid the failure. Added `lib/clipboard.ts` (secure API → visible-element selection → in-dialog textarea; a `document.body` textarea loses focus to Radix's trap, and `execCommand` returns `true` even when it copied nothing). The key is now **auto-selected on reveal** so Ctrl/Cmd+C always works, and the submit button is hidden while a key is shown (matching member-drawer's temp-password behaviour) |
+| 141 | `.arch.local` → `.arch.internal` | ✅ Done | `.local` is reserved for mDNS (RFC 6762), so macOS/iOS/Linux never query a unicast resolver — every device needed a hand-edited `/etc/hosts`, and devices without one (the Kindle) could not reach the cluster at all. Moved **all 10 hostnames** across homecal/homenews/homework/llmgw/grafana/loki/argocd to `.arch.internal`, served from the router's DNS table. Clean cutover, not dual-hosting: `COOKIE_DOMAIN` and the build-time `NEXT_PUBLIC_AUTH_URL` each hold a single value. Verified: 10/10 resolve with **no hosts entries**, all endpoints 200, old names 404, `Access-Control-Allow-Origin` correct, 0 `arch.local` left in any cluster object |
+| 142 | Tests | ✅ Done | 37 new: `dash.test.ts` (15 — renderer, tz guard for the UTC-clock bug, initials, escaping, palette), `dash.integration.test.ts` (16 — auth boundary, `?key=`, private-event exclusion, HTML error pages), `auth-errors.test.ts` (6 — throttle vs auth-failure classification). Suite: **517 passing / 41 files** (261 unit) |
+
+
 ## Backlog (deferred)
 
 | Item | Notes |
@@ -359,7 +374,7 @@ Cutover completed 2026-05-27. HomeCal moved off the single-host docker-compose s
 - Daily digest (Phase 21, complete): admin-configured family digest email — `digest_settings` singleton config (enabled/sendAt/timezone) + per-user `receivesDailyDigest` recipients; a 60s `digest-scheduler` sends once per day at the local send time (private events excluded; each event = time · title · location · assignees); admin API `GET`/`PATCH /api/admin/digest` + `POST /digest/test`; admin **Notifications** tab (`/admin?tab=notifications`) with enable toggle, send-at + timezone, `MemberChip` recipient picker, and a "Send test" button
 - Email notifications: Nodemailer + Gmail SMTP (free tier 500/day), sends to assignees' email addresses, graceful skip when not configured
 - APNs client: token-based JWT auth (ES256), HTTP/2 to api.push.apple.com, graceful skip when credentials not configured
-- LAN setup: Arch Linux (192.168.1.163) backend, Mac Air web frontend + iOS dev
+- LAN setup: Arch Linux (192.168.1.163) k3s host, Mac Air web frontend + iOS dev; apps reachable at `http://<app>.arch.internal` from any device
 - Bearer auth: configurable CORS origins via `CORS_ORIGINS` env var
 - iOS app: Swift package (SPM, iOS 18+), actor-based APIClient with all endpoints (auth, events CRUD, members, parse), data models, SwiftLint config, test target
 - iOS auth: Login/Register SwiftUI screens, Keychain token persistence, @Observable AuthManager with session restore, ColorPicker for user color, auth-gated root view
@@ -371,20 +386,36 @@ Cutover completed 2026-05-27. HomeCal moved off the single-host docker-compose s
 - iOS reminders: Reminder preset toggles (15min/1hr/1day before) in EventFormView, immediate API calls for existing events, pending queue for new events, push notification permission on launch, AppDelegate device token forwarding to backend
 - Admin UI: `/admin` page (shield icon, admin only) with user table (color dot, name, email, role badge, status badge, created), search by name/email (case-insensitive), current user pinned first. Create modal (name/email/password/color/role/status). Edit modal (name/email/color/password reset/role toggle/status toggle). Delete with confirmation (pencil + trash icons).
 - User settings: gear icon for all users opens settings modal (email, color, password), auto-reloads page on save
+- E-ink wall dashboard (Phase 22): `GET /api/{,v1/}dash` renders today's events as a self-contained greyscale page for a wall-mounted Kindle — 618px, mono palette, boxed initials instead of colour dots, server-side timezone formatting (the device browser's JS clock reports UTC), `?refresh=` meta-refresh, `as of` staleness stamp, private events excluded. Authenticates by `?key=<hc_ key>` so a device that can only supply a URL still gets in; errors render as HTML that retries every 60s rather than a JSON page the display cannot recover from
+- LAN DNS: all 10 cluster hostnames on `*.arch.internal`, served from the router's DNS table — no `/etc/hosts` entry on any device, including ones that cannot hold one
 
 ## What's Next
 
-Phase 19 (k3s migration, tasks 84–124) shipped 2026-05-27. Cluster is the source of truth; docker-compose is held in rollback window through 2026-06-03 then decommissioned in I1.
+Phase 22 (e-ink wall dashboard + LAN DNS migration) shipped 2026-09-16. The Kindle is
+mounted and serving live data; every app is on `.arch.internal` and no device on the LAN
+needs an `/etc/hosts` entry any more.
 
-**Immediate follow-ups** (none blocking; pick when convenient):
-- iOS `LocalConfig.swift` → point at `homecal-api.arch.local` (currently broken since H3 stopped the LAN port the iOS app was hardcoded to)
-- Add `homecal.arch.local` + `homecal-api.arch.local` to /etc/hosts on any other client devices (Mac, etc.) — needs Traefik IP `192.168.1.163`, or `127.0.0.1` if accessed from the cluster host
-- Flip `migrate.enabled=true` in arch-infra's `apps/homecal.yaml` after a few days — enables the Helm pre-install hook to auto-apply future Drizzle migrations
-- Optional: write a backup job for the cluster PVC (parity with the old docker volume which also had none)
+**Immediate follow-ups** (none blocking):
+- **Kindle boot hook** — `preventScreenSaver` is a runtime powerd property, so the first
+  reboot silently returns the wall to sleeping and showing lockscreen ads with no error.
+  Needs an upstart job in `/etc/upstart/`, which lives on the **root** filesystem (not
+  `/mnt/us`), so it must be installed on-device by a scriptlet and requires a temporary
+  rootfs remount. Until then: re-tap **Keep Awake v3** in the Kindle library after a reboot
+- iOS `LocalConfig.swift` → point at `http://homecal-api.arch.internal` (unblocked by task
+  141: the name now resolves on-device without a hosts file)
+- Argo CD reconciles on a 180s poll and a GitHub webhook is not possible (the cluster is
+  LAN-only, so GitHub cannot reach it). Either set `timeout.reconciliation: 60s` in
+  `argocd-cm`, or keep using the `refresh=hard` annotation in CLAUDE.md. Deliberately left
+  as-is
+- `StatefulSet/homecal-db` reads permanently **OutOfSync** in Argo — a known normalization
+  gap on `volumeClaimTemplates` (`kubectl diff` is empty; a sync applies nothing). Harmless,
+  but it masks real drift; fix with an `ignoreDifferences` rule on the Application in
+  arch-infra
+- Optional: backup job for the cluster PVC (parity with the old docker volume, which also
+  had none)
 
-**Phase 21 — Daily Digest**: **complete** (tasks 125–133) on branch `fix/dev-cookie-and-today-filter` — schema + migration, `getTodayEvents` refactor, text + **HTML** renderer, email send, the 60s digest scheduler (send-window fire semantics), the admin config API, and the admin **Notifications** tab. Also uncommitted alongside: self-service email/password fix in Account settings (`auth.ts` + `calendar-header.tsx`). **All uncommitted — next step is to commit + run the full suite.**
-
-**Phase 20** (Public API ergonomics) is the next active backlog phase per [design-plan.md](design-plan.md).
+**Phase 20** (Public API ergonomics) is the next active backlog phase per
+[design-plan.md](design-plan.md).
 
 ## Reference Docs
 
