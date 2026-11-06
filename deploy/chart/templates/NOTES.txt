@@ -9,8 +9,9 @@ Tail logs:
   kubectl logs -n {{ .Release.Namespace }} deploy/homecal-web -f
   kubectl logs -n {{ .Release.Namespace }} statefulset/homecal-db -f
 
-Loki history (30d retention for {namespace="homecal"}):
-  curl -sG http://loki.observability.svc.cluster.local:3100/loki/api/v1/query_range \
+Loki history (30d retention for {namespace="homecal"}), in Grafana Explore at http://grafana.arch.internal, or from a shell:
+  kubectl -n observability port-forward svc/loki 3100:3100 &
+  curl -sG http://localhost:3100/loki/api/v1/query_range \
     --data-urlencode 'query={namespace="{{ .Release.Namespace }}"} | json | event="http.request"' \
     --data-urlencode "start=$(date -u -d '-30 min' +%s)000000000" \
     --data-urlencode "end=$(date -u +%s)000000000"
