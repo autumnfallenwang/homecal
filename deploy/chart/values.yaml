@@ -52,7 +52,7 @@ api:
     COOKIE_DOMAIN: .arch.internal
     LOG_LEVEL: info
     # In-cluster Service DNS for llmgw (cross-namespace; llmgw lives in `llmgw` ns).
-    LLM_GATEWAY_URL: http://llmgw.llmgw
+    LLM_GATEWAY_URL: http://llmgw.llmgw.svc.cluster.local
     LLM_MODEL: claude-haiku-4-5
     LLM_FALLBACK_MODEL: gemma3:27b
     # EMAIL_FROM lives in homecal-secrets (loaded via secretKeyRef in

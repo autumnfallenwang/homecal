@@ -86,7 +86,7 @@ Secrets (`homecal-secrets` k8s Secret, namespace `homecal`):
 
 ### Dev vs Prod
 
-- **Dev**: feature branches, `pnpm dev`, dev DB on port 5432, hot reload. `apps/api/.env` holds dev DATABASE_URL + LLM_GATEWAY_URL=http://llmgw.arch.internal
+- **Dev**: feature branches, `pnpm dev`, dev DB on port 5432, hot reload. `apps/api/.env` holds dev DATABASE_URL + LLM_GATEWAY_URL=http://llmgw.llmgw.svc.cluster.local
 - **Prod**: main branch, k3s cluster, cluster DB on port 5432 in-cluster
 - **Deploy**: merge to main → GHA builds + pushes images + bumps arch-infra → Argo CD applies
 - **Migrations**: SQL files in `apps/api/drizzle/`, applied via `pnpm --filter @homecal/api db:migrate` (dev) or the Helm pre-install Job (cluster, flip `migrate.enabled=true` in arch-infra to activate). Generate new ones with `db:generate` after editing `db/schema.ts`. Additive-only — never delete/rename columns. Do NOT use `drizzle-kit push` — destructive, doesn't track applied migrations (deprecated in Phase 19)
