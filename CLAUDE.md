@@ -63,7 +63,7 @@ Common ops:
 kubectl logs -n homecal deploy/homecal-api -f
 
 # Loki history (30d retention)
-curl -sG http://loki.arch.internal/loki/api/v1/query_range \
+curl -sG http://loki.observability.svc.cluster.local:3100/loki/api/v1/query_range \
   --data-urlencode 'query={namespace="homecal"} | json | event="reminder.dispatch.email"' \
   --data-urlencode "start=$(date -u -d '-1 hour' +%s)000000000" \
   --data-urlencode "end=$(date -u +%s)000000000"

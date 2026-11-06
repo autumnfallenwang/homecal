@@ -367,7 +367,7 @@ kubectl -n homecal exec homecal-db-0 -- psql -U homecal -d homecal_prod -c \
 Or via curl:
 
 ```bash
-curl -sG http://loki.arch.internal/loki/api/v1/query_range \
+curl -sG http://loki.observability.svc.cluster.local:3100/loki/api/v1/query_range \
   --data-urlencode 'query={namespace="homecal", service="homecal-api"} | json | event="http.request"' \
   --data-urlencode "start=$(date -u -d '-5 min' +%s)000000000" \
   --data-urlencode "end=$(date -u +%s)000000000" | jq '.data.result | length'
