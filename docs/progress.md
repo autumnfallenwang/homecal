@@ -336,6 +336,68 @@ Cutover completed 2026-05-27. HomeCal moved off the single-host docker-compose s
 | 141 | `.arch.local` → `.arch.internal` | ✅ Done | `.local` is reserved for mDNS (RFC 6762), so macOS/iOS/Linux never query a unicast resolver — every device needed a hand-edited `/etc/hosts`, and devices without one (the Kindle) could not reach the cluster at all. Moved **all 10 hostnames** across homecal/homenews/homework/llmgw/grafana/loki/argocd to `.arch.internal`, served from the router's DNS table. Clean cutover, not dual-hosting: `COOKIE_DOMAIN` and the build-time `NEXT_PUBLIC_AUTH_URL` each hold a single value. Verified: 10/10 resolve with **no hosts entries**, all endpoints 200, old names 404, `Access-Control-Allow-Origin` correct, 0 `arch.local` left in any cluster object |
 | 142 | Tests | ✅ Done | 37 new: `dash.test.ts` (15 — renderer, tz guard for the UTC-clock bug, initials, escaping, palette), `dash.integration.test.ts` (16 — auth boundary, `?key=`, private-event exclusion, HTML error pages), `auth-errors.test.ts` (6 — throttle vs auth-failure classification). Suite: **517 passing / 41 files** (261 unit) |
 
+### Phases 23–26 — Home devices + kids' room speaker (built 2026-11-10)
+
+Plan and design decisions in [design-plan.md](design-plan.md); device findings in [speaker-poc-memo.md](speaker-poc-memo.md). Liveness comes first: in the 2026-11-10 re-run the POC agent had been dead for about four weeks without anyone noticing.
+
+### Phase 23 — Devices hub
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 143 | Schema + shared types | ✅ Done | `household_devices`, `household_device_members`, `users.receivesDeviceAlerts`; settings union in `packages/shared`; additive migration |
+| 144 | Device keys | ✅ Done | Create / rotate / revoke / delete under `/api/v1/admin/devices`, key shown once; "adopt existing key" for the Kindle; "Home devices" service account |
+| 145 | Check-in tracking | ✅ Done | `requireDeviceAuth` writes `lastSeenAt` (at most every 30 s); `/dash` records Kindle check-ins and applies its display settings, URL params override |
+| 146 | Health scheduler | ✅ Done | `checkDeviceHealth()` on the 60 s tick: stale/offline per-device thresholds (speaker 5 min, Kindle 30 min), one email per outage + recovery, catches devices already offline at restart |
+| 147 | Devices tab (web) | ✅ Done | `/admin?tab=devices`: cards with status dot / last seen / room / member chips, edit drawer, key reveal, alert-recipient chips |
+| 148 | Tests | ✅ Done | `devices.test.ts` (11) + `devices.integration.test.ts` (21): auth 401/403/revoked, Zod 400s, thresholds, no duplicate alerts, restart case, `/dash` last seen + settings, adopt/rotate/revoke/delete |
+
+### Phase 24 — Speaker agent v1
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 149 | Shared sync schemas | ✅ Done | Versioned report + desired-state Zod schemas in `packages/shared` |
+| 150 | `POST /api/v1/agent/sync` | ✅ Done | Device key in `x-api-key`; stores status + last seen; returns desired state + `nextPollAfterMs`: 60 s idle, 15 s while an admin has the drawer open (`POST /admin/devices/:id/attention`), 5 s for 2 min after Say now |
+| 151 | Agent releases | ✅ Done | Releases bundled into the API image, `GET /api/v1/agent/releases/:version`, sha256 at startup, per-device pinned version (rollback = pin older) |
+| 152 | Agent v1 | ✅ Done | `apps/speaker-agent/` (Python stdlib): sync loop, cached desired state, local scheduler, quiet hours, pre-downloaded sounds + fallback tone, timestamped heartbeat log, crash rollback, no `:8080` listener. First install over SSH replaces the POC agent |
+| 153 | Test sound + Say now | ✅ Done | `POST /api/v1/admin/devices/:id/announce`, announcements expire after 2 min; speaker drawer shows battery / version / RSSI / last sync |
+| 154 | Tests | ✅ Done | `agent-sync.integration.test.ts` (14) + `local-time.test.ts` (9) + agent `unittest` (20, stubbed Termux/HTTP/clock), wired into `pnpm test` and CI `test:fast` |
+
+### Phase 25 — Routines (wake-ups)
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 155 | Schema + shared types | ✅ Done | `routines`, `routine_skips`, `routine_runs`; additive migration |
+| 156 | Routine API | ✅ Done | Admin create / edit / delete, skip next, pause/resume under `/api/v1/admin/routines` |
+| 157 | Occurrence expansion | ✅ Done | Pure `expandRoutines()`: next 7 days in the family timezone, DST, holidays via `getHolidays()`, pauses and skips; added to the sync response |
+| 158 | Morning briefing | ✅ Done | Message + that member's events today (`getTodayEvents`, private excluded), fixed template, rendered at sync time |
+| 159 | Rang tracking + alerts | ✅ Done | Rang reports stored in `routine_runs`; email 30 min before if the speaker is offline, and if nothing rang within 5 min |
+| 160 | Web | ✅ Done | Weekday chips extracted from `event-dialog.tsx` into a shared component; Wake-ups section on the Devices tab; routine editor |
+| 161 | Tests | ✅ Done | `routines.test.ts` (11) + `routines.integration.test.ts` (13): DST, holidays, pause/skip, 7-day horizon, private exclusion, alert dedup, admin gates |
+
+### Phase 26 — Event reminders on speakers + announce API
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 162 | Schema + shared types | ✅ Done | Channel `speaker`, `minutesBefore` ≥ 0 ("At start"), `event_reminder_devices`, `users.reminderDelivery` (default `["email", "push"]` = today's behaviour); additive |
+| 163 | Dispatch | ✅ Done | Explicit + per-member speaker reminders for the next 24 h in the desired state; `sentAt` on the rang report; email/push respect `reminderDelivery`; no double announcements; private events never read aloud |
+| 164 | Announce API | ✅ Done | `POST /api/v1/speaker/announce` for other home apps: quiet-hours refusal, per-key rate limit, OpenAPI updated |
+| 165 | Web | ✅ Done | Event dialog: "At start", Email / Speaker toggles, speaker picker (`GET /api/v1/speaker/speakers`, any member); member drawer: reminder delivery |
+| 166 | Tests | ✅ Done | `speaker-reminders.integration.test.ts` (16): routing, dedup, quiet hours, private exclusion, `minutesBefore = 0`, existing members unchanged, announce auth + 400s + rate limit (mini app). Suite: **615 passing / 48 files** |
+
+### Ops — Speaker phone track (by hand)
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| P1 | Lock Termux in recents + PIN decision | Not started | Recommended: Screen lock → None (memo Finding 15) |
+| P2 | Factory reset + re-setup | Not started | Before go-live; redo memo Appendix D. Optional first: Termux repo copy as a cluster service (memo open item 6) |
+| P3 | Watchdog test | ✅ Done | Registered by `tools/install.sh` (job 4201, 15 min, persisted). 2026-11-10: `am force-stop com.termux` at 12:14:59 → offline alert 12:19:50 → Android's job scheduler restarted Termux at 12:31:43 → agent synced, recovery alert 12:31:50. Outage ~17 min, nobody touched the phone |
+| P4 | Wi-Fi + DHCP reservation | Not started | Device MAC instead of randomized, reserve 192.168.1.245, better spot than −72 dBm |
+| P5 | Chinese TTS check | Not started | Only if a speaker is set to Chinese |
+| P6 | Go-live gate | Not started | After Phase 25: 5 straight days of wake-ups, every one reported rung. Until then the speaker is not the kids' only alarm |
+
+**End-to-end, 2026-11-10** (dev API on 192.168.1.163:3001, the real Mi 8, screen asleep; details in [speaker-poc-memo.md](speaker-poc-memo.md) Part 4):
+registered the speaker on the Devices tab → `tools/install.sh` replaced the POC agent with v1.0.0 → first sync, status online (battery, Wi-Fi, version shown) and volumes applied → Say now from the drawer played (21 s on the first one, the phone was still on its 60 s cadence) → a 12:08 wake-up made in the UI rang at 12:08:00 (`routine_runs` ok, Nov 11 Veterans Day skipped, briefing read the afternoon event) → an event made in the event dialog with a 15-min **Speaker** reminder rang at 12:10:00 and was stamped sent → self-update to a temporary 1.0.1 and back by pinning 1.0.0 in the drawer (same PID, `.prev` kept) → the P3 watchdog run above. The routine was deleted afterwards and the phone's schedule confirmed empty. **Not yet deployed**: the phone points at the dev API until this ships; then register it in prod and re-run `tools/install.sh` with the prod URL and key.
+
 
 ## Backlog (deferred)
 
@@ -387,6 +449,7 @@ Cutover completed 2026-05-27. HomeCal moved off the single-host docker-compose s
 - Admin UI: `/admin` page (shield icon, admin only) with user table (color dot, name, email, role badge, status badge, created), search by name/email (case-insensitive), current user pinned first. Create modal (name/email/password/color/role/status). Edit modal (name/email/color/password reset/role toggle/status toggle). Delete with confirmation (pencil + trash icons).
 - User settings: gear icon for all users opens settings modal (email, color, password), auto-reloads page on save
 - E-ink wall dashboard (Phase 22): `GET /api/{,v1/}dash` renders today's events as a self-contained greyscale page for a wall-mounted Kindle — 618px, mono palette, boxed initials instead of colour dots, server-side timezone formatting (the device browser's JS clock reports UTC), `?refresh=` meta-refresh, `as of` staleness stamp, private events excluded. Authenticates by `?key=<hc_ key>` so a device that can only supply a URL still gets in; errors render as HTML that retries every 60s rather than a JSON page the display cannot recover from
+- Household devices (Phases 23–26): admin **Devices** tab for the Kindle and speaker phones — per-device `hc_` keys, last seen, offline/recovery email alerts; speaker phones run `apps/speaker-agent` (Termux, Python stdlib) that pulls its desired state from `POST /api/v1/agent/sync`, holds wake-ups and reminders locally (rings with the cluster down), self-updates from releases bundled in the API image, and is revived by a 15-min watchdog. **Routines** (wake-ups, bedtime) are their own entity, off the calendar, with holiday skip, morning briefing and missed-wake-up alerts. Event reminders can play on speakers (per event, or per member via `reminderDelivery`), and other home apps can announce via `POST /api/v1/speaker/announce`
 - LAN DNS: all 10 cluster hostnames on `*.arch.internal`, served from the router's DNS table — no `/etc/hosts` entry on any device, including ones that cannot hold one
 
 ## What's Next
@@ -400,7 +463,9 @@ needs an `/etc/hosts` entry any more.
   reboot silently returns the wall to sleeping and showing lockscreen ads with no error.
   Needs an upstart job in `/etc/upstart/`, which lives on the **root** filesystem (not
   `/mnt/us`), so it must be installed on-device by a scriptlet and requires a temporary
-  rootfs remount. Until then: re-tap **Keep Awake v3** in the Kindle library after a reboot
+  rootfs remount. Until then: re-tap **Keep Awake v3** in the Kindle library after a reboot.
+  Phase 23 doesn't fix this, but it makes it visible: a sleeping Kindle stops fetching
+  `/dash` and triggers an offline alert
 - iOS `LocalConfig.swift` → point at `http://homecal-api.arch.internal` (unblocked by task
   141: the name now resolves on-device without a hosts file)
 - Argo CD reconciles on a 180s poll and a GitHub webhook is not possible (the cluster is
@@ -414,9 +479,20 @@ needs an `/etc/hosts` entry any more.
 - Optional: backup job for the cluster PVC (parity with the old docker volume, which also
   had none)
 
-**Phase 20** (Public API ergonomics) is the next active backlog phase per
-[design-plan.md](design-plan.md).
+**Phases 23–26 are built and verified end to end** on the dev API with the real Mi 8 (see the
+Phase 23–26 tables). Next:
+- **Ship it**: merge to main (5 additive migrations, 0012–0016; the API image now also carries
+  `apps/speaker-agent/releases` and `sounds`). Then on the prod Devices tab register the speaker,
+  adopt the Kindle's existing key, and re-run `apps/speaker-agent/tools/install.sh 192.168.1.245
+  http://homecal-api.arch.internal <key-file>`. The phone runs agent v1.0.0 but still points at
+  the dev API; it idles harmlessly until then.
+- **Phone track by hand**: P1 (lock Termux in recents, PIN decision), P2 (factory reset before
+  go-live), P4 (device MAC + DHCP reservation, better signal). P3 (watchdog) passed.
+- **P6 go-live gate**: 5 straight days of real wake-ups reported rung, before the speaker is the
+  kids' only alarm.
+- Phase 20 (Public API ergonomics) stays a placeholder.
 
 ## Reference Docs
 
 - [design-plan.md](design-plan.md) — app design, tech stack, frontend decisions, build phases
+- [speaker-poc-memo.md](speaker-poc-memo.md) — wake-up speaker POC (old Android phone), findings and re-run

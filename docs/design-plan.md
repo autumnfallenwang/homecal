@@ -549,6 +549,138 @@ An admin-configured email that summarizes the day's family calendar and lands in
 - Push-channel digest (email only for now).
 - Weekly / monthly digests; a "skip days with no events" toggle.
 
+### Phases 23–26 — Home devices + kids' room speaker (overview)
+
+Planned 2026-11-10. Inputs: [speaker-poc-memo.md](speaker-poc-memo.md) (POC 2026-10-12, re-run 2026-11-10) and a survey of how Skylight, Hearth, Google Family Bell / Downtime, Alexa, Hatch, Google Tasks, Apple Reminders, Cozi and Home Assistant handle the same problems.
+
+**Goal**: homecal manages every household output device from one place. The first new device is an old Android phone in the kids' room (Xiaomi Mi 8, Termux + a small Python agent). It holds the kids' wake-ups, announces their reminders, and is noticed the moment it goes quiet. Same idea as the Kindle (Phase 22): the device stays simple and the cluster does the thinking.
+
+**Why liveness comes first**: in the re-run, the POC agent had been dead for about four weeks. MIUI killed Termux without a reboot, and nothing noticed. Audio worked every time it was tested; staying alive, and being seen to be alive, is the real problem.
+
+**Shared decisions**:
+- **One Devices tab** in `/admin`, next to Family, Services and Notifications, for every device (display or speaker). Remote shell, APK installs and MIUI settings stay out of the web: SSH or by hand (memo Appendix D).
+- **Naming**: `household_devices` and `/api/v1/admin/devices`, because `device_tokens` and `/api/devices` already mean iOS push tokens. Calls made by devices live under `/api/v1/agent/*`.
+- **Keys**: one `hc_` key per device, all on a single "Home devices" service account (Phase 17 flow), rotated and revoked per device.
+- **Devices serve members.** Each device lists the members it serves, and anything addressed to a member (routine, reminder) reaches the devices serving them. Moving a kid to another room means changing one device setting.
+- **Routines are not events** (Phase 25). Anything that happens once stays a calendar event and can ring on a speaker (Phase 26). Anything that repeats daily is a routine and stays off the calendar.
+- **The speaker holds its own alarms** (memo Finding 5). The server sends concrete occurrences ahead of time; the phone caches them and rings with the cluster down.
+- **Quiet hours** per speaker: wake-ups and per-event speaker reminders always ring; Say now, automatic announcements and update messages are held back (the Google Downtime rule).
+- **Alerts go by email.** APNs is not live (Backlog), so device alerts use `services/email.ts`.
+
+**Phone track** (by hand, in parallel with the code):
+- **P1** — Lock Termux in recents. Decide the screen-lock PIN (recommended: None, memo Finding 15).
+- **P2** — Factory reset before go-live (79 old apps and the previous owner's data), then redo the setup runbook (memo Appendix D). Optional first: the Termux repo copy as a cluster service (memo open item 6).
+- **P3** — Watchdog test: a persisted `termux-job-scheduler` job re-runs the boot script every 15 min. Kill Termux and confirm it comes back (memo open item 10).
+- **P4** — Wi-Fi: switch to the device MAC, reserve 192.168.1.245 on the router, find a spot with a better signal than −72 dBm.
+- **P5** — If any speaker is set to Chinese, check that the phone's TTS speaks it.
+- **P6** — **Go-live gate**, after Phase 25: 5 straight days of wake-ups, every one reported as rung. Until then the speaker is not the kids' only alarm.
+
+**Proposed defaults** (confirm before Phase 23 starts): device alerts go by email to admins, with recipients editable on the Devices tab; speaker language is set per device and defaults to English; routines stay off the calendar and only admins edit them in v1.
+
+### Phase 23 — Devices hub
+
+Every household device in one admin tab, with last seen and offline alerts. Ships before any speaker code, and the Kindle benefits straight away: when a reboot puts it back to sleep, it stops fetching and an alert goes out.
+
+**Design decisions**:
+- **Device record**: kind (`display` | `speaker`), name, room, key id, members served, kind-specific settings (a Zod discriminated union in `packages/shared`), `lastSeenAt`, last reported status, alert state.
+- **A check-in is any authenticated request from the device.** `requireDeviceAuth` resolves key → device and writes `lastSeenAt`, at most once a minute. For the Kindle that is each `/dash` fetch.
+- **Display settings live on the server.** `/dash` reads the refresh interval and which members to show from the device record. URL params still override, so the Kindle's current URL keeps working.
+- **Offline rule**: stale, then offline, after N minutes without a check-in, set per device. Defaults: 5 min for a speaker (it syncs every 60 s), 30 min for the Kindle (it refreshes every 600 s). Evaluated on every 60 s scheduler tick, not only when the state changes, so a device that was already offline when the API restarted is still caught (the Home Assistant lesson). One email per outage, one on recovery.
+- **Adopting the Kindle**: "Adopt existing key" links its current service-account key to a new device record. Nothing changes on the Kindle.
+
+**Tasks**:
+143. **Schema + shared types.** `household_devices`; `household_device_members` (deviceId, userId, unique pair); `users.receivesDeviceAlerts` (default false, backfilled true for admins). Settings union in `packages/shared`. Additive migration via `db:generate`.
+144. **Device keys.** Admin API under `/api/v1/admin/devices`: create a device (issues its key, shown once), rotate, revoke, delete, and "adopt existing key". Keys hang off the "Home devices" service account, created on first use.
+145. **Check-in tracking.** `requireDeviceAuth` middleware. `/dash` records the Kindle's check-ins and applies its display settings when the key belongs to a device.
+146. **Health scheduler.** `checkDeviceHealth()` on the 60 s tick: online → stale → offline transitions, and outage and recovery emails to members with `receivesDeviceAlerts`, de-duplicated by the alert state.
+147. **Devices tab (web).** `/admin?tab=devices`: device cards (kind icon, status dot, relative last seen, room, member chips); an edit drawer (name, room, members, offline threshold, display settings); a key reveal that is shown once and reuses `lib/clipboard.ts`; alert-recipient chips.
+148. **Tests.** Auth boundaries (401 unauthenticated, 403 non-admin, revoked key), Zod 400s, threshold transitions, no duplicate alerts, the restart case, `/dash` last seen and display settings, URL override.
+
+**Out of scope for Phase 23**: the speaker protocol (Phase 24); push alerts (APNs not live); per-device alert recipients.
+
+### Phase 24 — Speaker agent v1
+
+The phone becomes a managed homecal device. It pulls its settings from the cluster, reports its health, updates itself, and plays Test sound and Say now. Replaces the POC agent.
+
+**Design decisions** (protocol copied from homeparentcontrol's design, A.5 / A.6 / A.21 / A.26; memo "Target architecture"):
+- **Outbound calls only.** The phone opens every connection, and its key goes in the `x-api-key` header, not the URL. The POC's open `:8080` listener goes away.
+- **One call**: `POST /api/v1/agent/sync`. The request body is a report: agent version, battery, charging, Wi-Fi RSSI, uptime, and items rung since the last sync. The response is the desired state: settings, announcements, sounds, pinned agent version with its sha256, and `nextPollAfterMs`. The sync doubles as the heartbeat.
+- **Cadence**: every 60 s normally, every 15 s while an admin has the speaker's drawer open (the drawer pings `POST /admin/devices/:id/attention`), and every 5 s for 2 minutes after a Say now is queued. Without the 15 s step a Say now could wait up to a minute.
+- **Desired state, not commands.** The schema is versioned and grows in Phases 25–26 (wake-up occurrences, reminder announcements).
+- **Agent releases ship inside the API image** at `GET /api/v1/agent/releases/:version`, with sha256 computed at startup. The version is pinned per device; pinning an older one rolls the phone back (self-update proven in memo Part 2).
+- **Agent code** lives in `apps/speaker-agent/`: Python, standard library only, with a `unittest` suite wired into `pnpm test`. The API Dockerfile copies the release files.
+- **Announcements expire** (2 min by default), so an offline speaker never plays a stale Say now later.
+
+**Tasks**:
+149. **Shared Zod schemas** for the sync report and the desired state, in `packages/shared`, with a schema version.
+150. **`POST /api/v1/agent/sync`** (`requireDeviceAuth`, speakers only): validates the report, stores status and last seen, returns the desired state and the poll interval.
+151. **Agent releases.** Bundle `apps/speaker-agent` releases into the API image; serve `GET /api/v1/agent/releases/:version`; per-device pinned version in settings (default: the latest bundled).
+152. **Agent v1** (`apps/speaker-agent/agent.py`):
+     - sync loop, and an on-disk cache of the desired state (atomic writes)
+     - local scheduler and quiet hours
+     - sounds downloaded at sync with a sha256 check, plus a built-in fallback tone
+     - timestamped heartbeat log (memo Finding 22)
+     - rang reports retried until acknowledged
+     - self-update, with rollback to `agent.py.prev` if the new version keeps crashing (memo open item 7)
+     - no "Speaker updated" speech during quiet hours
+
+     First install replaces the POC agent over SSH, with the key in `~/.config/homecal-speaker/key` (mode 600). After that it updates itself.
+153. **Test sound + Say now.** `POST /api/v1/admin/devices/:id/announce` (admin) queues an expiring announcement. The speaker drawer gets Test sound and Say now buttons and shows battery, charging, agent version, RSSI and last sync.
+154. **Tests.** API integration (auth, 400s, desired-state shape, fast cadence after Say now, expiry, pinned version). Agent unit tests with stubbed Termux commands (cache, scheduler, quiet hours, refusing a bad sha256 or a failing `--check`, rollback).
+
+**Out of scope for Phase 24**: routines (Phase 25); event reminders (Phase 26); Piper TTS; managing Termux packages from the web.
+
+### Phase 25 — Routines (wake-ups)
+
+Daily repeating sounds for a member, such as wake-up and bedtime. The speaker holds them, and they stay off the calendar.
+
+**Design decisions**:
+- **A routine** is: member, title, message, time (`HH:MM`), weekdays (a comma list like `series.weekDays`, but numbered 0 = Sunday like JavaScript `getDay`; series are 0 = Monday), sound, enabled, paused-until date, skip public holidays, and skip dates ("skip next"). Modelled on Google Family Bell, but addressed to a member rather than a device.
+- **Routing**: a routine plays on the speakers that serve its member.
+- **The server expands, the phone rings.** Each sync carries concrete occurrences for the **next 7 days**. They are resolved in the family timezone (digest settings), with DST, holidays (`getHolidays()` with the member's `holidayCountries`), pauses and skips already applied. The phone needs no calendar logic and keeps ringing for a week with the cluster down.
+- **Morning briefing**: after the sound, the message plus that member's events for the day (`getTodayEvents`, private excluded), rendered at sync time from a fixed template. No LLM in v1.
+- **Rang tracking and alerts**: `routine_runs` records scheduled vs rang per device. A warning goes out 30 min before an occurrence if its speaker is offline, and an alert if no rang report arrives within 5 min of the scheduled time.
+- **Not on the calendar** in v1; the device card shows the next wake-up. Only admins edit routines.
+- **UI reuse**: the series weekday chips, currently inline in `event-dialog.tsx`, become a shared component used by both editors.
+
+**Tasks**:
+155. **Schema + shared types.** `routines`; `routine_skips` (routineId, date); `routine_runs` (routineId, deviceId, occurrence date, scheduledAt, rangAt, result). Additive migration.
+156. **Routine API.** Admin create, edit, delete, plus "skip next" and pause/resume, under `/api/v1/admin/routines`, all Zod-validated.
+157. **Occurrence expansion.** Pure `expandRoutines({ routines, tz, holidays, now, days: 7 })`, added to the sync response for each speaker's served members.
+158. **Morning briefing.** Render the message plus today's events for each occurrence at sync time, refreshed on every sync so late calendar changes are picked up.
+159. **Rang tracking + alerts.** Store rang reports from the sync. The scheduler emails the offline warning and the missed-wake-up alert, once per occurrence.
+160. **Web.** Extract the weekday-chip picker. Add a Wake-ups section to the Devices tab, grouped by member, and a routine editor (time, days, message, sound, skip holidays, enable/pause, skip next). Cards show the next ring and the last result.
+161. **Tests.** Expansion across a DST change and holidays, pause and skip, the 7-day horizon, private events left out of the briefing, alert de-duplication, admin gates.
+
+**Out of scope for Phase 25**: routines on the calendar (an optional layer, later); an "I'm up" tap with streaks; non-admin editing; choosing a device per routine instead of by member; an LLM-written briefing.
+
+### Phase 26 — Event reminders on speakers + announce API
+
+Any calendar event can ring through a speaker, and other home apps can make announcements.
+
+**Design decisions**:
+- **Per event**: the event dialog's reminder section gets an "At start" preset and a **Speaker** toggle next to Email. A speaker reminder plays the beeps, then speaks something like "Soccer practice in 15 minutes". By default it goes to the speakers serving the event's assignees, or to speakers picked in the dialog, so a parent-only "Pick up the kids" can still ring in the kids' room.
+- **Per member** (the Cozi model): `users.reminderDelivery` lists the channels a member receives their event reminders on (`email`, `push`, `speaker`). It defaults to `["email", "push"]`, today's behaviour (a push row pushes only to members with `push`, so a default of `["email"]` would have silently stopped existing iPhone reminders). An email reminder emails only members whose delivery includes email, and every reminder also plays on the speakers serving members whose delivery includes speaker. A kid set to speaker hears all their reminders without anyone ticking anything.
+- **Storage**: a speaker reminder is an `event_reminders` row with `channel = "speaker"`, with explicit speaker picks in a join table `event_reminder_devices`. The shared schema starts accepting `"speaker"` and `minutesBefore = 0`. All additive.
+- **Held by the phone**: speaker reminders due in the next 24 h go into the desired state, so they fire on time through short cluster outages. Edits and deletes reach the phone on the next sync.
+- **Quiet hours**: a speaker reminder ticked on the event always rings; automatic per-member ones respect quiet hours.
+- **Private events are never read aloud**, the same rule as the digest and `/dash`.
+- **Announce API** for other home apps (homework, homeparentcontrol): `POST /api/v1/speaker/announce` targets members or devices, is refused during quiet hours with a clear `code`, and is rate-limited per key.
+
+**Tasks**:
+162. **Schema + shared types.** Channel `speaker`; `minutesBefore` may be 0; `event_reminder_devices`; `users.reminderDelivery`. Additive migration.
+163. **Dispatch.**
+     - Speaker reminders, explicit and per-member, for the next 24 h go into each speaker's desired state.
+     - `sentAt` is stamped when the device reports the reminder rang.
+     - Email and push respect `reminderDelivery`.
+     - No double announcement when both paths hit the same speaker at the same time.
+     - Private events are left out.
+164. **Announce API.** `POST /api/v1/speaker/announce` for service-account keys: Zod-validated, refused during quiet hours, rate-limited per key. OpenAPI spec updated.
+165. **Web.** Event dialog: "At start" preset, Email / Speaker toggles, a speaker picker, and the "Email reminders" label becomes "Reminders". Member drawer: a reminder-delivery setting.
+166. **Tests.** Explicit vs per-member routing, de-duplication, quiet-hours rules, private exclusion, `minutesBefore = 0`, existing members unchanged (default `["email", "push"]`), announce auth (401/403), 400s, rate limit.
+
+**Out of scope for Phase 26**: speaker reminders in the iOS app (web first); push delivery (APNs not live); Piper TTS.
+
 ### Backlog — Future Enhancements (deferred)
 - iOS LocalConfig.swift update post Phase-19 cutover — point at homecal-api.arch.internal; requires LAN DNS resolution on device
 - Sealed Secrets bootstrap — encrypt secrets at rest in arch-infra (no-downtime env source swap once operator is installed)

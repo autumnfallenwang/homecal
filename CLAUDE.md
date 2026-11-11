@@ -11,6 +11,7 @@ Turborepo + pnpm | Hono + Zod (API) | Next.js App Router (Web) | Swift + SwiftUI
 - `apps/api/` — Hono backend API (dev: 3001, prod: 51001)
 - `apps/web/` — Next.js frontend (dev: 3000, prod: 51000)
 - `apps/ios/` — SwiftUI iOS app (Swift Package Manager)
+- `apps/speaker-agent/` — Python agent for Termux speaker phones (Phases 24–26). Stdlib only; `releases/` and `sounds/` are bundled into the API image. Cut a release with `pnpm --filter @homecal/speaker-agent release` after bumping `VERSION`; install on a phone with `tools/install.sh`
 - `packages/shared/` — shared Zod schemas and types
 - `deploy/` — Docker deployment (compose, Dockerfiles, CLI script)
 - `docs/` — design docs
