@@ -1,0 +1,12 @@
+{
+  "name": "@homecal/speaker-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HomeCal speaker agent for Termux phones (Python, stdlib only). Releases in releases/ are served by the API.",
+  "scripts": {
+    "test": "python3 -m unittest discover -s tests",
+    "test:fast": "python3 -m unittest discover -s tests",
+    "lint": "python3 -m py_compile agent.py tools/release.py tools/make_sounds.py",
+    "release": "python3 -I tools/release.py"
+  }
+}

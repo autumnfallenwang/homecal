@@ -183,3 +183,7 @@ DerivedData/
 # Scratch and tooling output (never committed)
 tmp/
 .playwright-mcp/
+
+# Python bytecode (apps/speaker-agent tests)
+__pycache__/
+*.pyc
