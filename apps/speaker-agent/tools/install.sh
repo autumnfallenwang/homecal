@@ -14,7 +14,9 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' "$HERE/agent.py" | head -n 1)"
 RELEASE="$HERE/releases/agent-$VERSION.py"
 [ -f "$RELEASE" ] || { echo "no release for $VERSION — run tools/release.py first" >&2; exit 1; }
-SSH=(ssh -p 8022 -i "${SPEAKER_SSH_KEY:-$HOME/.ssh/home_speaker_ed25519}" -o BatchMode=yes "speaker@$PHONE")
+# IPQoS=none: OpenSSH 10's default DSCP marking makes connections to the
+# dozing phone time out on this Wi-Fi (plain TCP to :8022 still connects).
+SSH=(ssh -p 8022 -i "${SPEAKER_SSH_KEY:-$HOME/.ssh/home_speaker_ed25519}" -o BatchMode=yes -o IPQoS=none "speaker@$PHONE")
 
 echo "[install] agent $VERSION → $PHONE, server $SERVER"
 "${SSH[@]}" 'mkdir -p ~/homecal-speaker ~/.config/homecal-speaker ~/.termux/boot
