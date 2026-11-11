@@ -36,6 +36,15 @@ export const users = pgTable("users", {
   // not a Better Auth additionalField. Defaults on — the digest itself is off
   // until an admin enables it, so auto-subscribing new members is harmless.
   receivesDailyDigest: boolean().notNull().default(true),
+  // Phase 23: whether this member gets household-device alerts (a device went
+  // offline / came back, a wake-up didn't ring). The migration backfills admins
+  // to true; everyone else opts in from the Devices tab.
+  receivesDeviceAlerts: boolean().notNull().default(false),
+  // Phase 26: how this member receives their event reminders. An email row
+  // emails only members with "email" here, a push row pushes only to "push";
+  // with "speaker", every reminder of their events also plays on the speakers
+  // that serve them. The default keeps today's behaviour (email + push).
+  reminderDelivery: text().array().notNull().default(["email", "push"]),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
@@ -241,6 +250,169 @@ export const digestSettings = pgTable(
   (table) => [unique("digest_settings_singleton_unique").on(table.singleton)],
 );
 
+// Phase 23 — household output devices: the Kindle wall display ("display") and
+// speaker phones ("speaker"). Distinct from device_tokens (iOS push tokens).
+// Each device authenticates with its own hc_ key; `apikeyId` links it, and a
+// request made with that key is a check-in. Status (online/stale/offline) is
+// computed from lastSeenAt on read; offlineAlertedAt de-duplicates alerts.
+export const householdDevices = pgTable(
+  "household_devices",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    kind: text().notNull(),
+    name: text().notNull(),
+    room: text(),
+    apikeyId: uuid().references(() => apikeys.id, { onDelete: "set null" }),
+    settings: jsonb().notNull().default({}),
+    offlineAfterMinutes: integer().notNull(),
+    alertsEnabled: boolean().notNull().default(true),
+    lastSeenAt: timestamp({ withTimezone: true }),
+    lastStatus: jsonb(),
+    offlineAlertedAt: timestamp({ withTimezone: true }),
+    // Phase 24: while an admin has this speaker open, it polls every 15 s
+    // instead of 60 s, so a Say now typed there arrives quickly.
+    attentionUntil: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("household_devices_apikey_unique").on(table.apikeyId)],
+);
+
+// Which members a device serves. Routines and reminders addressed to a member
+// reach the devices serving them; for a display it filters whose events show
+// (no rows = everyone).
+export const householdDeviceMembers = pgTable(
+  "household_device_members",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    deviceId: uuid()
+      .notNull()
+      .references(() => householdDevices.id, { onDelete: "cascade" }),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    index("household_device_members_user_id_idx").on(table.userId),
+    unique("household_device_members_device_user_unique").on(table.deviceId, table.userId),
+  ],
+);
+
+// Phase 24 — one-off messages for a speaker: Say now, Test sound, and the
+// announce API (Phase 26). Delivered in the speaker's desired state until it
+// reports them played or they expire (2 min), so an offline speaker never plays
+// a stale message later.
+export const deviceAnnouncements = pgTable(
+  "device_announcements",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    deviceId: uuid()
+      .notNull()
+      .references(() => householdDevices.id, { onDelete: "cascade" }),
+    text: text().notNull(),
+    sound: text().notNull().default("chime"),
+    source: text().notNull(),
+    createdById: uuid().references(() => users.id, { onDelete: "set null" }),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    playedAt: timestamp({ withTimezone: true }),
+    playOk: boolean(),
+    playError: text(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("device_announcements_device_id_idx").on(table.deviceId)],
+);
+
+// Phase 26 — speakers picked for a speaker-channel event reminder. No rows =
+// the speakers serving the event's assignees.
+export const eventReminderDevices = pgTable(
+  "event_reminder_devices",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    reminderId: uuid()
+      .notNull()
+      .references(() => eventReminders.id, { onDelete: "cascade" }),
+    deviceId: uuid()
+      .notNull()
+      .references(() => householdDevices.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    unique("event_reminder_devices_reminder_device_unique").on(table.reminderId, table.deviceId),
+  ],
+);
+
+// Phase 25 — routines: a daily repeating sound for one member (wake-up,
+// bedtime), held by the speakers that serve that member. Not calendar events:
+// they never appear in event lists, the digest, /dash or ICS. `weekDays` uses
+// a comma list like series ("1,2,3,4,5"), but 0 = Sunday, not Monday; `time` is local HH:MM in the
+// household timezone; `pausedUntil` is the last paused local date (inclusive).
+export const routines = pgTable(
+  "routines",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    memberId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text().notNull(),
+    message: text().notNull().default(""),
+    time: text().notNull(),
+    weekDays: text().notNull(),
+    sound: text().notNull().default("beeps"),
+    enabled: boolean().notNull().default(true),
+    skipHolidays: boolean().notNull().default(true),
+    includeBriefing: boolean().notNull().default(true),
+    pausedUntil: text(),
+    createdById: uuid().references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("routines_member_id_idx").on(table.memberId)],
+);
+
+// One-off skipped dates ("skip tomorrow"), local YYYY-MM-DD.
+export const routineSkips = pgTable(
+  "routine_skips",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    routineId: uuid()
+      .notNull()
+      .references(() => routines.id, { onDelete: "cascade" }),
+    date: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("routine_skips_routine_date_unique").on(table.routineId, table.date)],
+);
+
+// What happened to each occurrence on each speaker: rang (ok or not), and which
+// alerts went out (offline 30 min before, missed after). One row per
+// (routine, device, local date), created by a rang report or by an alert.
+export const routineRuns = pgTable(
+  "routine_runs",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    routineId: uuid()
+      .notNull()
+      .references(() => routines.id, { onDelete: "cascade" }),
+    deviceId: uuid()
+      .notNull()
+      .references(() => householdDevices.id, { onDelete: "cascade" }),
+    occurrenceDate: text().notNull(),
+    scheduledAt: timestamp({ withTimezone: true }).notNull(),
+    rangAt: timestamp({ withTimezone: true }),
+    ok: boolean(),
+    error: text(),
+    offlineWarnedAt: timestamp({ withTimezone: true }),
+    missedAlertedAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("routine_runs_routine_device_date_unique").on(
+      table.routineId,
+      table.deviceId,
+      table.occurrenceDate,
+    ),
+  ],
+);
+
 // Relations for Drizzle relational query builder
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -296,4 +468,17 @@ export const eventRemindersRelations = relations(eventReminders, ({ one }) => ({
 
 export const deviceTokensRelations = relations(deviceTokens, ({ one }) => ({
   user: one(users, { fields: [deviceTokens.userId], references: [users.id] }),
+}));
+
+export const householdDevicesRelations = relations(householdDevices, ({ one, many }) => ({
+  apikey: one(apikeys, { fields: [householdDevices.apikeyId], references: [apikeys.id] }),
+  members: many(householdDeviceMembers),
+}));
+
+export const householdDeviceMembersRelations = relations(householdDeviceMembers, ({ one }) => ({
+  device: one(householdDevices, {
+    fields: [householdDeviceMembers.deviceId],
+    references: [householdDevices.id],
+  }),
+  user: one(users, { fields: [householdDeviceMembers.userId], references: [users.id] }),
 }));

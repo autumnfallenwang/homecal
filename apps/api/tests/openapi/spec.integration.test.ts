@@ -79,6 +79,13 @@ describe("GET /api/openapi.json", () => {
       "/admin/users/{id}/reset-password",
       "/admin/api-keys",
       "/holidays",
+      "/admin/devices",
+      "/admin/devices/{id}",
+      "/admin/devices/{id}/announce",
+      "/agent/sync",
+      "/admin/routines",
+      "/admin/users/{id}/reminder-delivery",
+      "/speaker/announce",
     ];
     for (const path of expected) {
       expect(spec.paths).toHaveProperty(path);

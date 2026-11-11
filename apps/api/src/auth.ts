@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin, apiKey, bearer } from "better-auth/plugins";
-import { count } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { db } from "./db/index.js";
 import * as schema from "./db/schema.js";
 
@@ -94,6 +94,17 @@ export const auth = betterAuth({
             return { data: { ...user, role: "admin" } };
           }
           return { data: user };
+        },
+        // Phase 23: the household's first admin gets device alerts by default,
+        // so a fresh install isn't silently alerting nobody. (Existing admins
+        // were backfilled by the migration; others opt in on the Devices tab.)
+        after: async (user) => {
+          if ((user as { role?: string }).role === "admin") {
+            await db
+              .update(schema.users)
+              .set({ receivesDeviceAlerts: true })
+              .where(eq(schema.users.id, user.id));
+          }
         },
       },
     },

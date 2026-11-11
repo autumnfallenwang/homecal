@@ -1,0 +1,1 @@
+ALTER TABLE "household_devices" ADD COLUMN "attentionUntil" timestamp with time zone;

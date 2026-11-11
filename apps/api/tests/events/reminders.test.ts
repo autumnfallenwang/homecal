@@ -8,8 +8,9 @@ describe("createReminderSchema", () => {
     expect(createReminderSchema.safeParse({ minutesBefore: 1440 }).success).toBe(true);
   });
 
-  it("rejects zero", () => {
-    expect(createReminderSchema.safeParse({ minutesBefore: 0 }).success).toBe(false);
+  // Phase 26: 0 is the "At start" preset (it was rejected before).
+  it("accepts zero as 'at start'", () => {
+    expect(createReminderSchema.safeParse({ minutesBefore: 0 }).success).toBe(true);
   });
 
   it("rejects negative", () => {
@@ -44,6 +45,25 @@ describe("createReminderSchema", () => {
   it("accepts channel push", () => {
     const result = createReminderSchema.safeParse({ minutesBefore: 15, channel: "push" });
     expect(result.success).toBe(true);
+  });
+
+  it("accepts channel speaker, with optional speaker ids", () => {
+    expect(createReminderSchema.safeParse({ minutesBefore: 15, channel: "speaker" }).success).toBe(
+      true,
+    );
+    const ids = ["5b0f1a30-0d53-4c50-9a76-2b3c3b5f3a11"];
+    expect(
+      createReminderSchema.safeParse({ minutesBefore: 15, channel: "speaker", deviceIds: ids })
+        .success,
+    ).toBe(true);
+  });
+
+  it("rejects speaker ids on a non-speaker channel", () => {
+    const ids = ["5b0f1a30-0d53-4c50-9a76-2b3c3b5f3a11"];
+    expect(
+      createReminderSchema.safeParse({ minutesBefore: 15, channel: "email", deviceIds: ids })
+        .success,
+    ).toBe(false);
   });
 
   it("rejects invalid channel", () => {

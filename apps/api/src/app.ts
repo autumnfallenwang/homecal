@@ -7,12 +7,14 @@ import { requestLog } from "./middleware/request-log.js";
 import { getOpenApiSpec } from "./openapi/spec.js";
 import { swaggerUiHtml } from "./openapi/swagger-ui.html.js";
 import { adminApp } from "./routes/admin.js";
+import { agentApp } from "./routes/agent.js";
 import { dashApp } from "./routes/dash.js";
 import { devicesApp } from "./routes/devices.js";
 import { eventsApp } from "./routes/events.js";
 import { holidaysApp } from "./routes/holidays.js";
 import { remindersApp } from "./routes/reminders.js";
 import { seriesApp } from "./routes/series.js";
+import { speakerApp } from "./routes/speaker.js";
 import { usersApp } from "./routes/users.js";
 
 export const app = new Hono();
@@ -94,6 +96,8 @@ for (const prefix of apiPrefixes) {
   app.route(`${prefix}/admin`, adminApp);
   app.route(`${prefix}/holidays`, holidaysApp);
   app.route(`${prefix}/dash`, dashApp);
+  app.route(`${prefix}/agent`, agentApp);
+  app.route(`${prefix}/speaker`, speakerApp);
 }
 
 // Example protected route (used by integration tests)

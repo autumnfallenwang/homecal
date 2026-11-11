@@ -5,6 +5,12 @@ import { requireDashAuth } from "../middleware/dash-auth.js";
 import { renderDashError, renderDashPage } from "../services/dash.js";
 import { buildTodayDigestEvents } from "../services/digest-scheduler.js";
 import { getOrCreateDigestSettings } from "../services/digest-settings.js";
+import {
+  displaySettingsOf,
+  findDeviceByApiKeyId,
+  getDeviceMemberIds,
+  recordCheckIn,
+} from "../services/household-devices.js";
 
 type Session = typeof auth.$Infer.Session;
 
@@ -51,8 +57,23 @@ dashApp.get("/", async (c) => {
   const settings = await getOrCreateDigestSettings();
   const tz = parsed.data.tz ?? settings.timezone;
   const now = new Date();
-  const events = await buildTodayDigestEvents(tz, now);
+
+  // Phase 23: when the key belongs to a registered display, this fetch is its
+  // check-in, and its stored settings apply. URL params still win, so the
+  // Kindle's existing URL keeps working unchanged.
+  let refreshSeconds = parsed.data.refresh;
+  let memberIds: string[] = [];
+  const device = await findDeviceByApiKeyId(c.get("session").id);
+  if (device) {
+    await recordCheckIn(device, now);
+    if (refreshSeconds === undefined) {
+      refreshSeconds = displaySettingsOf(device).refreshSeconds ?? undefined;
+    }
+    memberIds = await getDeviceMemberIds(device.id);
+  }
+
+  const events = await buildTodayDigestEvents(tz, now, memberIds);
 
   c.header("Cache-Control", "no-store");
-  return c.html(renderDashPage({ events, tz, now, refreshSeconds: parsed.data.refresh }));
+  return c.html(renderDashPage({ events, tz, now, refreshSeconds }));
 });

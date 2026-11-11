@@ -27,9 +27,19 @@ export interface DigestDispatchFns {
 }
 
 /** Today's non-private family events shaped for the digest, in the given zone.
- *  Shared by the scheduled/test dispatch and the printable digest page. */
-export async function buildTodayDigestEvents(tz: string, now: Date): Promise<DigestEventInput[]> {
-  const { todayEvents } = await getTodayEvents({ tz, now, requesterId: null });
+ *  Shared by the scheduled/test dispatch, the printable digest page and the
+ *  wall display. `userIds`, when non-empty, keeps only events assigned to them. */
+export async function buildTodayDigestEvents(
+  tz: string,
+  now: Date,
+  userIds?: string[],
+): Promise<DigestEventInput[]> {
+  const { todayEvents } = await getTodayEvents({
+    tz,
+    now,
+    requesterId: null,
+    userIds: userIds && userIds.length > 0 ? new Set(userIds) : null,
+  });
   return todayEvents.map((e) => ({
     title: e.title,
     start: new Date(e.start),

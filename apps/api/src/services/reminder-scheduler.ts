@@ -5,7 +5,11 @@ import { log } from "../lib/logger.js";
 import { type ApnsConfig, getApnsConfig, type PushPayload, sendPush } from "./apns.js";
 import { type EmailConfig, getEmailConfig, sendReminderEmail } from "./email.js";
 
+/** A speaker reminder nobody played is retired this long after it was due. */
+export const SPEAKER_REMINDER_EXPIRY_MS = 30 * 60_000;
+
 export function formatReminderBody(minutesBefore: number): string {
+  if (minutesBefore === 0) return "now";
   if (minutesBefore < 60) {
     return minutesBefore === 1 ? "in 1 minute" : `in ${minutesBefore} minutes`;
   }
@@ -62,10 +66,25 @@ export async function checkDueReminders(fns?: DispatchFns): Promise<number> {
   let sentCount = 0;
 
   for (const reminder of dueReminders) {
-    // Get all assignees for this event
+    // Phase 26: speaker reminders are held and played by the speakers (they
+    // stamp sentAt when they report it rang). One no speaker played is retired
+    // here half an hour after it was due, so it stops being re-selected.
+    if (reminder.channel === "speaker") {
+      const dueAt = reminder.eventStart.getTime() - reminder.minutesBefore * 60_000;
+      if (Date.now() - dueAt > SPEAKER_REMINDER_EXPIRY_MS) {
+        await db
+          .update(eventReminders)
+          .set({ sentAt: new Date() })
+          .where(eq(eventReminders.id, reminder.reminderId));
+      }
+      continue;
+    }
+
+    // Get all assignees for this event, with how each wants reminders delivered
     const assignees = await db
-      .select({ userId: eventAssignees.userId })
+      .select({ userId: eventAssignees.userId, delivery: users.reminderDelivery })
       .from(eventAssignees)
+      .innerJoin(users, eq(eventAssignees.userId, users.id))
       .where(eq(eventAssignees.eventId, reminder.eventId));
 
     if (assignees.length === 0) {
@@ -76,7 +95,18 @@ export async function checkDueReminders(fns?: DispatchFns): Promise<number> {
       continue;
     }
 
-    const assigneeIds = assignees.map((a) => a.userId);
+    // Only members whose delivery includes this row's channel (Phase 26; the
+    // default ["email", "push"] keeps the old behaviour).
+    const assigneeIds = assignees
+      .filter((a) => a.delivery.includes(reminder.channel))
+      .map((a) => a.userId);
+    if (assigneeIds.length === 0) {
+      await db
+        .update(eventReminders)
+        .set({ sentAt: new Date() })
+        .where(eq(eventReminders.id, reminder.reminderId));
+      continue;
+    }
     const bodyText = formatReminderBody(reminder.minutesBefore);
 
     let deliveryOk = true;

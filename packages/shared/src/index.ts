@@ -62,11 +62,19 @@ export const parsedEventSchema = z.object({
   assignees: z.array(z.string()).optional().default([]),
 });
 
-// Reminders
-export const createReminderSchema = z.object({
-  minutesBefore: z.number().int().positive().max(10080), // max 1 week
-  channel: z.enum(["email", "push"]).optional().default("email"),
-});
+// Reminders. Phase 26: 0 minutes = "At start"; the "speaker" channel plays the
+// reminder on speakers — the ones in `deviceIds`, else those serving the
+// event's assignees. `deviceIds` is only meaningful for the speaker channel.
+export const createReminderSchema = z
+  .object({
+    minutesBefore: z.number().int().min(0).max(10080), // max 1 week
+    channel: z.enum(["email", "push", "speaker"]).optional().default("email"),
+    deviceIds: z.array(z.uuid()).max(20).optional(),
+  })
+  .refine((r) => !r.deviceIds?.length || r.channel === "speaker", {
+    message: "deviceIds only apply to the speaker channel",
+    path: ["deviceIds"],
+  });
 
 // Device tokens
 export const registerDeviceSchema = z.object({
@@ -162,4 +170,48 @@ export const digestSettingsSchema = z.object({
 });
 export type DigestSettings = z.infer<typeof digestSettingsSchema>;
 
+export {
+  AGENT_SYNC_SCHEMA_VERSION,
+  type AgentSyncReport,
+  type AnnounceInput,
+  agentSyncReportSchema,
+  announceSchema,
+  type CreateDeviceInput,
+  type CreateRoutineInput,
+  createDeviceSchema,
+  createRoutineSchema,
+  DEFAULT_DISPLAY_SETTINGS,
+  DEFAULT_OFFLINE_AFTER_MINUTES,
+  DEFAULT_SPEAKER_SETTINGS,
+  DEVICE_KINDS,
+  DEVICE_STATUSES,
+  type DesiredAnnouncement,
+  type DesiredScheduleItem,
+  type DesiredState,
+  type DeviceKind,
+  type DeviceStatus,
+  type DisplaySettings,
+  deviceStatusFor,
+  displaySettingsSchema,
+  type QuietHours,
+  quietHoursSchema,
+  type RangReport,
+  REMINDER_DELIVERY_CHANNELS,
+  type ReminderDeliveryChannel,
+  rangReportSchema,
+  SPEAKER_LANGUAGES,
+  SPEAKER_SOUNDS,
+  type SpeakerAnnounceInput,
+  type SpeakerSettings,
+  type SpeakerSound,
+  skipRoutineSchema,
+  speakerAnnounceSchema,
+  speakerSettingsSchema,
+  type UpdateDeviceInput,
+  type UpdateRoutineInput,
+  updateDeviceAlertRecipientsSchema,
+  updateDeviceSchema,
+  updateReminderDeliverySchema,
+  updateRoutineSchema,
+} from "./devices.js";
 export { acceptLanguageToCountry, localeToCountry } from "./locale.js";

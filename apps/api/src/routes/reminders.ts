@@ -1,9 +1,15 @@
 import { createReminderSchema } from "@homecal/shared";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import type { auth } from "../auth.js";
 import { db } from "../db/index.js";
-import { eventLogs, eventReminders, events } from "../db/schema.js";
+import {
+  eventLogs,
+  eventReminderDevices,
+  eventReminders,
+  events,
+  householdDevices,
+} from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 
 type Session = typeof auth.$Infer.Session;
@@ -45,7 +51,25 @@ remindersApp.get("/", async (c) => {
     .where(eq(eventReminders.eventId, eventId))
     .orderBy(eventReminders.minutesBefore);
 
-  return c.json(reminders);
+  // Phase 26: speaker reminders list the speakers picked for them ([] = the
+  // speakers serving the event's assignees).
+  const links = reminders.length
+    ? await db
+        .select()
+        .from(eventReminderDevices)
+        .where(
+          inArray(
+            eventReminderDevices.reminderId,
+            reminders.map((r) => r.id),
+          ),
+        )
+    : [];
+  return c.json(
+    reminders.map((r) => ({
+      ...r,
+      deviceIds: links.filter((l) => l.reminderId === r.id).map((l) => l.deviceId),
+    })),
+  );
 });
 
 // POST / — Add a reminder
@@ -75,6 +99,17 @@ remindersApp.post("/", async (c) => {
     return c.json({ error: "Reminder already exists for this interval and channel" }, 409);
   }
 
+  const deviceIds = [...new Set(parsed.data.deviceIds ?? [])];
+  if (deviceIds.length > 0) {
+    const speakers = await db
+      .select({ id: householdDevices.id })
+      .from(householdDevices)
+      .where(and(inArray(householdDevices.id, deviceIds), eq(householdDevices.kind, "speaker")));
+    if (speakers.length !== deviceIds.length) {
+      return c.json({ error: "Unknown speaker id" }, 400);
+    }
+  }
+
   const [reminder] = await db
     .insert(eventReminders)
     .values({
@@ -83,6 +118,11 @@ remindersApp.post("/", async (c) => {
       channel: parsed.data.channel,
     })
     .returning();
+  if (deviceIds.length > 0) {
+    await db
+      .insert(eventReminderDevices)
+      .values(deviceIds.map((deviceId) => ({ reminderId: reminder.id, deviceId })));
+  }
 
   // Log for shared events
   if (!event.private) {
@@ -99,7 +139,7 @@ remindersApp.post("/", async (c) => {
     });
   }
 
-  return c.json(reminder, 201);
+  return c.json({ ...reminder, deviceIds }, 201);
 });
 
 // DELETE /:reminderId — Remove a reminder

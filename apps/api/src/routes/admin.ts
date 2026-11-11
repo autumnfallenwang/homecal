@@ -3,8 +3,9 @@ import {
   createApiKeyInputSchema,
   createServiceAccountSchema,
   updateDigestSettingsSchema,
+  updateReminderDeliverySchema,
 } from "@homecal/shared";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { Hono } from "hono";
 import { auth } from "../auth.js";
 import { db } from "../db/index.js";
@@ -19,7 +20,10 @@ import {
   saveDigestSettings,
   setDigestRecipients,
 } from "../services/digest-settings.js";
+import { HOME_DEVICES_EMAIL } from "../services/household-devices.js";
 import { generateTempPassword } from "../services/temp-password.js";
+import { adminDevicesApp } from "./admin-devices.js";
+import { adminRoutinesApp } from "./admin-routines.js";
 
 type Session = typeof auth.$Infer.Session;
 
@@ -30,6 +34,12 @@ export const adminApp = new Hono<{
 
 adminApp.use(requireAuth);
 adminApp.use(requireAdmin);
+
+// Phase 23 — household devices (Kindle, speaker phones). Mounted here so the
+// routes share this app's single requireAuth + requireAdmin gate.
+adminApp.route("/devices", adminDevicesApp);
+// Phase 25 — routines (wake-ups, bedtime), held by speakers.
+adminApp.route("/routines", adminRoutinesApp);
 
 /**
  * Best-effort user-agent → short device label. Parses the first token like
@@ -282,7 +292,9 @@ adminApp.get("/service-accounts", async (c) => {
       createdAt: users.createdAt,
     })
     .from(users)
-    .where(eq(users.isService, true))
+    // The "Home devices" account owns per-device keys, which are managed on the
+    // Devices tab — listing it here would invite rotating them out of band.
+    .where(and(eq(users.isService, true), ne(users.email, HOME_DEVICES_EMAIL)))
     .orderBy(asc(users.name));
 
   if (svcUsers.length === 0) {
@@ -421,4 +433,34 @@ adminApp.get("/digest/print", async (c) => {
   const now = new Date();
   const events = await buildTodayDigestEvents(settings.timezone, now);
   return c.html(renderDigestPrintPage({ events, tz: settings.timezone, now }));
+});
+
+// ─── Reminder delivery (Phase 26) — how each member gets event reminders ───
+
+// GET /reminder-delivery — every family member's channels
+adminApp.get("/reminder-delivery", async (c) => {
+  const rows = await db
+    .select({ userId: users.id, reminderDelivery: users.reminderDelivery })
+    .from(users)
+    .where(eq(users.isService, false));
+  return c.json(rows);
+});
+
+// PATCH /users/:id/reminder-delivery — e.g. ["speaker"] for a kid without a phone
+adminApp.patch("/users/:id/reminder-delivery", async (c) => {
+  const targetUserId = c.req.param("id");
+  const target = /^[0-9a-f-]{36}$/.test(targetUserId)
+    ? await db.query.users.findFirst({ where: eq(users.id, targetUserId) })
+    : undefined;
+  if (!target || target.isService) {
+    return c.json({ error: "User not found" }, 404);
+  }
+  const body = await c.req.json().catch(() => null);
+  const parsed = updateReminderDeliverySchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.issues }, 400);
+  }
+  const reminderDelivery = [...new Set(parsed.data.reminderDelivery)];
+  await db.update(users).set({ reminderDelivery }).where(eq(users.id, targetUserId));
+  return c.json({ userId: targetUserId, reminderDelivery });
 });

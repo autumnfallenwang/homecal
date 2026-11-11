@@ -1,6 +1,11 @@
 /* biome-ignore-all lint/style/useNamingConvention: OpenAPI spec keys are canonical (requestBody, securitySchemes, apiKeyAuth, etc.) */
 import * as shared from "@homecal/shared";
 import { z } from "zod";
+import {
+  householdDevicePaths,
+  householdDeviceSchemas,
+  householdDeviceTags,
+} from "./household-devices.js";
 
 /**
  * HomeCal OpenAPI 3.1 spec — hand-curated. Schemas under `components.schemas`
@@ -241,11 +246,12 @@ export function getOpenApiSpec() {
       { name: "events", description: "Calendar events CRUD + smart input + import/export" },
       { name: "today", description: "Glance-first Today view backend" },
       { name: "series", description: "Recurring event series" },
-      { name: "reminders", description: "Per-event reminders (email + push)" },
+      { name: "reminders", description: "Per-event reminders (email, push, speaker)" },
       { name: "users", description: "Family member directory + preferences" },
       { name: "devices", description: "Device tokens for push notifications" },
       { name: "admin", description: "Admin-only routes (sessions, password reset, API keys)" },
       { name: "holidays", description: "Read-only national holidays layer (Phase 18)" },
+      ...householdDeviceTags,
     ],
     components: {
       securitySchemes: {
@@ -302,6 +308,7 @@ export function getOpenApiSpec() {
           },
           required: ["date", "title", "countries", "type"],
         },
+        ...householdDeviceSchemas,
       },
     },
     security: [{ cookieAuth: [] }, { bearerAuth: [] }, { apiKeyAuth: [] }],
@@ -1239,6 +1246,7 @@ export function getOpenApiSpec() {
           },
         },
       },
+      ...householdDevicePaths,
     },
   };
 }

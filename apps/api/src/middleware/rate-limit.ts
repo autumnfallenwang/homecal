@@ -47,3 +47,17 @@ export const adminRateLimiter = rateLimiter({
   limit: ADMIN_PER_MIN,
   message: { error: "Too many admin requests" },
 });
+
+/**
+ * Phase 26 — a much lower limit for the speaker announce API, so a runaway
+ * script can't turn the kids' room into a loudspeaker. Per caller (API key,
+ * then user, then IP), like the global limiter. A factory so tests can build
+ * one with a small limit.
+ */
+export function createAnnounceRateLimiter(limit = Number(process.env.ANNOUNCE_PER_MIN ?? 10)) {
+  return rateLimiter({
+    ...baseLimiterOptions,
+    limit,
+    message: { error: "Too many announcements", code: "RATE_LIMITED" },
+  });
+}
