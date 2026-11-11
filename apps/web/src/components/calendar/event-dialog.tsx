@@ -3,6 +3,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { ChangeLog } from "@/components/calendar/change-log";
 import { MemberChip } from "@/components/calendar/member-chip";
+import { WeekdayPicker } from "@/components/calendar/weekday-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -58,12 +59,19 @@ function toDateString(date: Date): string {
 }
 
 const REMINDER_PRESETS = [
+  { minutes: 0, label: "At start" },
   { minutes: 15, label: "15 min before" },
   { minutes: 60, label: "1 hour before" },
   { minutes: 1440, label: "1 day before" },
 ];
 
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+/** Reminder channels the dialog manages. Push rows are left to the iOS app. */
+type ReminderChannel = "email" | "speaker";
+interface SpeakerOption {
+  id: string;
+  name: string;
+  room: string | null;
+}
 
 export function EventDialog({
   date,
@@ -80,6 +88,13 @@ export function EventDialog({
   const [isPrivate, setIsPrivate] = useState(false);
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [reminderMinutes, setReminderMinutes] = useState<Set<number>>(new Set());
+  // Phase 26: which channels the chosen reminder times go to, and — for the
+  // speaker channel — which speakers (none picked = those serving the assignees).
+  const [emailOn, setEmailOn] = useState(true);
+  const [speakerOn, setSpeakerOn] = useState(false);
+  const [speakerIds, setSpeakerIds] = useState<Set<string>>(new Set());
+  const [originalSpeakerIds, setOriginalSpeakerIds] = useState<Set<string>>(new Set());
+  const [speakers, setSpeakers] = useState<SpeakerOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -102,6 +117,38 @@ export function EventDialog({
   const [seriesEditMode, setSeriesEditMode] = useState<"single" | "series" | null>(null);
 
   const { logs, isLoading: logsLoading } = useEventLogs(event?.id ?? null);
+
+  // Speakers anyone can pick for a reminder; the toggle hides when there are none.
+  useEffect(() => {
+    if (date === null && event === null) return;
+    fetch("/api/v1/speaker/speakers", { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows: SpeakerOption[]) => setSpeakers(rows))
+      .catch(() => setSpeakers([]));
+  }, [date, event]);
+
+  const activeChannels = (): ReminderChannel[] => [
+    ...(emailOn ? (["email"] as const) : []),
+    ...(speakerOn && speakers.length > 0 ? (["speaker"] as const) : []),
+  ];
+
+  /** POST every chosen (time × channel) reminder for a new event. */
+  async function postReminders(eventId: string, minutesList: Iterable<number> = reminderMinutes) {
+    for (const minutes of minutesList) {
+      for (const channel of activeChannels()) {
+        await fetch(`/api/events/${eventId}/reminders`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            minutesBefore: minutes,
+            channel,
+            ...(channel === "speaker" && speakerIds.size > 0 ? { deviceIds: [...speakerIds] } : {}),
+          }),
+        });
+      }
+    }
+  }
 
   const isCreate = date !== null && event === null;
   const isEdit = event !== null;
@@ -126,6 +173,10 @@ export function EventDialog({
     setIsPrivate(false);
     setAssigneeIds([]);
     setReminderMinutes(new Set());
+    setEmailOn(true);
+    setSpeakerOn(false);
+    setSpeakerIds(new Set());
+    setOriginalSpeakerIds(new Set());
     setError(null);
     setSaving(false);
     setConfirmingDelete(false);
@@ -181,9 +232,25 @@ export function EventDialog({
       setEnd(isoToLocalDatetime(event.end));
       setIsPrivate(event.private);
       setAssigneeIds(event.assignees.map((a) => a.id));
-      setReminderMinutes(
-        new Set(event.reminders.filter((r) => r.channel === "email").map((r) => r.minutesBefore)),
+      const managed = event.reminders.filter(
+        (r) => r.channel === "email" || r.channel === "speaker",
       );
+      setReminderMinutes(new Set(managed.map((r) => r.minutesBefore)));
+      setEmailOn(managed.length === 0 || managed.some((r) => r.channel === "email"));
+      setSpeakerOn(managed.some((r) => r.channel === "speaker"));
+      setSpeakerIds(new Set());
+      setOriginalSpeakerIds(new Set());
+      if (managed.some((r) => r.channel === "speaker")) {
+        // The event list doesn't carry speaker picks; the reminders route does.
+        fetch(`/api/events/${event.id}/reminders`, { credentials: "include" })
+          .then((res) => (res.ok ? res.json() : []))
+          .then((rows: { channel: string; deviceIds?: string[] }[]) => {
+            const picked = rows.find((r) => r.channel === "speaker")?.deviceIds ?? [];
+            setSpeakerIds(new Set(picked));
+            setOriginalSpeakerIds(new Set(picked));
+          })
+          .catch(() => undefined);
+      }
       // Series event: default to single edit, toggle to series
       if (event.seriesId) {
         setSeriesEditMode("single");
@@ -323,14 +390,7 @@ export function EventDialog({
         if (reminderMinutes.size > 0) {
           const eventData = await res.json().catch(() => null);
           if (eventData?.id) {
-            for (const minutes of reminderMinutes) {
-              await fetch(`/api/events/${eventData.id}/reminders`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({ minutesBefore: minutes, channel: "email" }),
-              });
-            }
+            await postReminders(eventData.id);
           }
         }
       }
@@ -399,14 +459,7 @@ export function EventDialog({
         if (reminderMinutes.size > 0) {
           const eventData = await res.json().catch(() => null);
           if (eventData?.id) {
-            for (const minutes of reminderMinutes) {
-              await fetch(`/api/events/${eventData.id}/reminders`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({ minutesBefore: minutes, channel: "email" }),
-              });
-            }
+            await postReminders(eventData.id);
           }
         }
       }
@@ -492,26 +545,43 @@ export function EventDialog({
         // Sync reminders for non-series events
         const eventId = isEdit ? event.id : responseData?.id;
         if (eventId) {
-          const originalMinutes = new Set(
-            event?.reminders.filter((r) => r.channel === "email").map((r) => r.minutesBefore) ?? [],
+          // Desired (channel, minutes) pairs vs what exists. A speaker row is
+          // also replaced when the picked speakers changed.
+          const channels = activeChannels();
+          const wanted = new Set(
+            [...reminderMinutes].flatMap((m) => channels.map((ch) => `${ch}:${m}`)),
           );
+          const picksChanged =
+            speakerIds.size !== originalSpeakerIds.size ||
+            [...speakerIds].some((id) => !originalSpeakerIds.has(id));
+          const kept = new Set<string>();
           for (const r of event?.reminders ?? []) {
-            if (r.channel === "email" && !reminderMinutes.has(r.minutesBefore)) {
-              await fetch(`/api/events/${eventId}/reminders/${r.id}`, {
-                method: "DELETE",
-                credentials: "include",
-              });
+            if (r.channel !== "email" && r.channel !== "speaker") continue;
+            const k = `${r.channel}:${r.minutesBefore}`;
+            if (wanted.has(k) && !(r.channel === "speaker" && picksChanged)) {
+              kept.add(k);
+              continue;
             }
+            await fetch(`/api/events/${eventId}/reminders/${r.id}`, {
+              method: "DELETE",
+              credentials: "include",
+            });
           }
-          for (const minutes of reminderMinutes) {
-            if (!originalMinutes.has(minutes)) {
-              await fetch(`/api/events/${eventId}/reminders`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({ minutesBefore: minutes, channel: "email" }),
-              });
-            }
+          for (const k of wanted) {
+            if (kept.has(k)) continue;
+            const [channel, m] = k.split(":");
+            await fetch(`/api/events/${eventId}/reminders`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                minutesBefore: Number(m),
+                channel,
+                ...(channel === "speaker" && speakerIds.size > 0
+                  ? { deviceIds: [...speakerIds] }
+                  : {}),
+              }),
+            });
           }
         }
       }
@@ -820,23 +890,7 @@ export function EventDialog({
                       <Label className="font-display text-xs italic tracking-wide text-muted-foreground">
                         On days
                       </Label>
-                      <div className="flex gap-1">
-                        {DAY_LABELS.map((label, i) => (
-                          <button
-                            key={label}
-                            type="button"
-                            onClick={() => toggleWeekDay(i)}
-                            className={cn(
-                              "h-9 w-10 rounded-full text-xs font-medium transition-colors",
-                              weekDays.has(i)
-                                ? "bg-foreground text-background"
-                                : "border border-rule text-muted-foreground hover:text-foreground",
-                            )}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
+                      <WeekdayPicker selected={weekDays} onToggle={toggleWeekDay} />
                     </div>
                   )}
 
@@ -962,7 +1016,7 @@ export function EventDialog({
 
               <div className="flex flex-col gap-1.5">
                 <Label className="font-display text-xs italic tracking-wide text-muted-foreground">
-                  Email reminders
+                  Reminders
                 </Label>
                 <div className="flex flex-wrap gap-1.5">
                   {REMINDER_PRESETS.map((preset) => {
@@ -984,6 +1038,71 @@ export function EventDialog({
                     );
                   })}
                 </div>
+                {reminderMinutes.size > 0 && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">by</span>
+                    {(
+                      [
+                        ["email", "Email", emailOn, setEmailOn],
+                        ...(speakers.length > 0
+                          ? ([["speaker", "Speaker", speakerOn, setSpeakerOn]] as const)
+                          : []),
+                      ] as const
+                    ).map(([key, label, on, set]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => set(!on)}
+                        className={cn(
+                          "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                          on
+                            ? "bg-foreground text-background"
+                            : "border border-rule text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {reminderMinutes.size > 0 && speakerOn && speakers.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground">
+                      {speakerIds.size === 0
+                        ? "Plays on the speakers of the people it's for — or pick:"
+                        : "Plays on:"}
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {speakers.map((sp) => {
+                        const on = speakerIds.has(sp.id);
+                        return (
+                          <button
+                            key={sp.id}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() =>
+                              setSpeakerIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(sp.id)) next.delete(sp.id);
+                                else next.add(sp.id);
+                                return next;
+                              })
+                            }
+                            className={cn(
+                              "rounded-full px-3 py-1 text-xs transition-colors",
+                              on
+                                ? "bg-accent text-accent-foreground"
+                                : "border border-rule text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            {sp.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

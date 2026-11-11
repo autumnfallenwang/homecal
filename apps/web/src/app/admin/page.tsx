@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DevicesPanel } from "@/components/admin/devices-panel";
 import { FamilyCard, type FamilyMember } from "@/components/admin/family-card";
 import { InviteCard } from "@/components/admin/invite-card";
 import { MemberDrawer } from "@/components/admin/member-drawer";
@@ -14,14 +15,15 @@ import { type ServiceAccount, useServiceAccounts } from "@/hooks/use-service-acc
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
-type AdminTab = "family" | "services" | "notifications";
+type AdminTab = "family" | "services" | "notifications" | "devices";
+const TABS: AdminTab[] = ["family", "services", "notifications", "devices"];
 
 export default function AdminPage() {
   const { session, isPending } = useAuthRedirect(true);
   const router = useRouter();
   const searchParams = useSearchParams();
   const rawTab = searchParams.get("tab");
-  const tab: AdminTab = rawTab === "services" || rawTab === "notifications" ? rawTab : "family";
+  const tab: AdminTab = TABS.includes(rawTab as AdminTab) ? (rawTab as AdminTab) : "family";
 
   const [loading, setLoading] = useState(true);
   const [allUsers, setAllUsers] = useState<FamilyMember[]>([]);
@@ -109,6 +111,8 @@ export default function AdminPage() {
   let heroSubtitle: string;
   if (tab === "notifications") {
     heroSubtitle = "the family's morning summary";
+  } else if (tab === "devices") {
+    heroSubtitle = "the wall display, speakers and wake-ups";
   } else if (tab === "services") {
     const s = services.length === 1 ? "" : "s";
     heroSubtitle = servicesLoading
@@ -121,7 +125,12 @@ export default function AdminPage() {
       : `${allUsers.length} member${s} · managed by ${session?.user?.name ?? "you"}`;
   }
 
-  const heroTitle = { family: "Family", services: "Services", notifications: "Notifications" }[tab];
+  const heroTitle = {
+    family: "Family",
+    services: "Services",
+    notifications: "Notifications",
+    devices: "Devices",
+  }[tab];
 
   if (isPending || !session || !isAdmin) {
     return null;
@@ -157,7 +166,7 @@ export default function AdminPage() {
         className="mb-8 inline-flex items-center gap-1 rounded-full border border-rule bg-card p-1"
         role="tablist"
       >
-        {(["family", "services", "notifications"] as const).map((key) => (
+        {TABS.map((key) => (
           <button
             key={key}
             type="button"
@@ -212,6 +221,7 @@ export default function AdminPage() {
       {tab === "notifications" && (
         <NotificationsPanel enabled={isAdmin && tab === "notifications"} />
       )}
+      {tab === "devices" && <DevicesPanel enabled={isAdmin && tab === "devices"} />}
 
       <MemberDrawer
         member={selectedMember}

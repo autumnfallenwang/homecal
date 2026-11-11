@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import type { FamilyMember } from "./family-card";
+import { ReminderDeliverySection } from "./reminder-delivery-section";
 
 interface MemberDrawerProps {
   member: FamilyMember | "new" | null;
@@ -360,6 +361,9 @@ export function MemberDrawer({ member, onClose, onSaved }: MemberDrawerProps) {
               </div>
             )}
           </section>
+
+          {/* ─── Reminder delivery (Phase 26, existing only) ─── */}
+          {existing && <ReminderDeliverySection userId={existing.id} />}
 
           {/* ─── Password reset (existing only) ─── */}
           {existing && (
